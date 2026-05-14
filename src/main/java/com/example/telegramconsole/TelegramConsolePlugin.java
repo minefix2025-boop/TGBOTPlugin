@@ -11,8 +11,8 @@ public class TelegramConsolePlugin extends JavaPlugin {
         instance = this;
         saveDefaultConfig();
         
-        String apiKey = getConfig().getString("telegram.api_key");
-        long adminId = getConfig().getLong("admin_telegram_id");
+        String apiKey = getConfig().getString("8629251193:AAGlBusPJyY5ra_5ndEBrFuMXh6Khm_ospk");
+        long adminId = getConfig().getLong("7742036100");
         boolean twoFAEnabled = getConfig().getBoolean("two_factor_auth.enabled");
         String secretCode = getConfig().getString("two_factor_auth.secret_code");
         
