@@ -64,7 +64,7 @@ public class BotManager {
         if (System.currentTimeMillis() - request.timestamp > 300000) return false;
         if (!request.playerUuid.equals(playerUuid)) return false;
         
-        linkedAccounts.put(playerName, request.telegramId != 0 ? request.telegramId : 0);
+        linkedAccounts.put(playerName, request.telegramId);
         return true;
     }
     
