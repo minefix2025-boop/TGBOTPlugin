@@ -16,7 +16,7 @@ public class TelegramConsolePlugin extends JavaPlugin {
         boolean twoFAEnabled = getConfig().getBoolean("two_factor_auth.enabled");
         String secretCode = getConfig().getString("two_factor_auth.secret_code");
         
-        if (apiKey == null || apiKey.isEmpty() || apiKey.equals("YOUR_API_KEY_HERE")) {
+        if (apiKey == null || apiKey.isEmpty() || apiKey.equals("8629251193:AAGlBusPJyY5ra_5ndEBrFuMXh6Khm_ospk")) {
             getLogger().severe("Telegram API key not configured! Please edit config.yml");
             getServer().getPluginManager().disablePlugin(this);
             return;
