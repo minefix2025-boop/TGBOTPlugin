@@ -1,0 +1,8 @@
+telegram:
+  api_key: "YOUR_API_KEY_HERE"
+
+admin_telegram_id: 0
+
+two_factor_auth:
+  enabled: false
+  secret_code: "your_secret_code"
