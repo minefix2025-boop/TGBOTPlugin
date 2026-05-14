@@ -1,1 +1,4 @@
-
+name: TelegramConsoleBot
+version: 1.0
+main: com.example.telegramconsole.TelegramConsolePlugin
+api-version: 1.16
