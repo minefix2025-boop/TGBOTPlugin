@@ -1,7 +1,4 @@
 package com.example.telegramconsole;
-import com.example.telegramconsole.commands.RegCommand;
-import com.example.telegramconsole.commands.LoginCommand;
-import com.example.telegramconsole.commands.TGConsoleCommand;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
