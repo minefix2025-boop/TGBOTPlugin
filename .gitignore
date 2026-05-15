@@ -1,0 +1,11 @@
+.idea/
+*.iml
+target/
+*.class
+*.jar
+*.war
+*.zip
+.DS_Store
+*.log
+ATGCON/
+config.yml
