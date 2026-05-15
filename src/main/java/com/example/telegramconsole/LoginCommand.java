@@ -17,20 +17,26 @@ public class LoginCommand implements CommandExecutor {
             p.sendMessage("§cИспользование: /login <пароль>");
             return true;
         }
-        if (!plugin.getDatabaseManager().isRegistered(p.getUniqueId())) {
+        if (!plugin.getDatabaseManager().playerExists(p.getName())) {
             p.sendMessage("§cВы еще не зарегистрированы! Используйте /reg");
             return true;
         }
-        if (plugin.getDatabaseManager().checkPassword(p.getUniqueId(), args[0])) {
-            long tgId = plugin.getDatabaseManager().getTelegramId(p.getUniqueId());
+        if (plugin.getDatabaseManager().isPlayerLocked(p.getName())) {
+            p.sendMessage("§cВаш аккаунт временно заблокирован из-за частых ошибок ввода.");
+            return true;
+        }
+
+        if (plugin.getDatabaseManager().loginPlayer(p.getName(), args[0])) {
+            long tgId = plugin.getDatabaseManager().getTelegramId(p.getName());
             if (tgId != 0) {
-                p.sendMessage("§6[2FA] Подтвердите вход в вашем Telegram боте!");
-                plugin.getBotManager().sendMsg(tgId, "🔔 Попытка входа в аккаунт " + p.getName() + ".\nДля подтверждения используйте панель.");
-                plugin.getBotManager().showAccountMenu(tgId, p.getUniqueId());
+                p.sendMessage("§6[2FA] Подтвердите вход в Telegram боте!");
+                plugin.getBotManager().sendMsg(tgId, "🔔 Зафиксирован вход в аккаунт " + p.getName() + ".\nДля управления сессией используйте меню:");
+                plugin.getBotManager().showAccountMenu(tgId, p.getName());
             } else {
-                p.sendMessage("§aУспешный вход! Настоятельно рекомендуем привязать Telegram: /link");
+                p.sendMessage("§aВход успешен! Защитите свой профиль: /link");
             }
         } else {
+            plugin.getDatabaseManager().recordFailedLogin(p.getName());
             p.sendMessage("§cНеверный пароль!");
         }
         return true;
