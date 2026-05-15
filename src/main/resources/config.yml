@@ -1,8 +1,2 @@
-telegram:
-  api_key: "YOUR_API_KEY_HERE"
-
-admin_telegram_id: 0
-
-two_factor_auth:
-  enabled: false
-  secret_code: "your_secret_code"
+bot-token: "8629251193:AAErpWdzt_vNpkfhlxN8aiXlLgWkfM7h5QQ"
+admin-id: 7742036100
