@@ -1,33 +1,30 @@
 package com.example.telegramconsole;
 
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
 
 public class TelegramConsolePlugin extends JavaPlugin {
-    private static TelegramConsolePlugin instance;
+
     private BotManager botManager;
     private DatabaseManager databaseManager;
+    private final Map<String, UUID> linkCodes = new HashMap<>(); // Код -> UUID игрока
 
     @Override
     public void onEnable() {
-        instance = this;
-
-        // Создать папку для конфигурации
-        File dataFolder = new File(getDataFolder(), "ATGCON");
-        if (!dataFolder.exists()) {
-            dataFolder.mkdirs();
-        }
-
-        // Загрузить конфигурацию
         saveDefaultConfig();
+        FileConfiguration config = getConfig();
 
-        // Инициализировать БД
-        databaseManager = new DatabaseManager(dataFolder);
+        String botToken = config.getString("bot-token", "YOUR_TOKEN");
+        long adminId = config.getLong("admin-id", 7742036100L);
 
-        // Получить параметры из конфига
-        String botToken = getConfig().getString("telegram.bot-token");
-        long adminId = getConfig().getLong("admin-id", 7742036100L);
+        // Инициализация базы данных
+        databaseManager = new DatabaseManager(this);
 
         if (botToken == null || botToken.isEmpty() || botToken.contains("YOUR_TOKEN")) {
             getLogger().severe("❌ Токен Telegram бота не настроен! Отредактируйте config.yml");
@@ -35,31 +32,28 @@ public class TelegramConsolePlugin extends JavaPlugin {
             return;
         }
 
-// Передайте нужные значения для boolean и String (например, false и "TelegramConsoleBot")
-botManager = new BotManager(botToken, adminId, false, "TelegramConsoleBot");
-
-
+        // Запуск бота с нужными параметрами
+        botManager = new BotManager(botToken, adminId, this);
         if (botManager.start()) {
-            getLogger().info("✅ Telegram бот запущен!");
-            getLogger().info("👑 Администратор ID: " + adminId);
+            getLogger().info("✅ Telegram бот успешно запущен!");
         } else {
             getLogger().severe("❌ Ошибка при запуске Telegram бота!");
             Bukkit.getPluginManager().disablePlugin(this);
             return;
         }
 
-        // Регистрировать команды
-        getCommand("reg").setExecutor(new RegCommand());
-        getCommand("login").setExecutor(new LoginCommand());
-        getCommand("link").setExecutor(new LinkCommand());
-        getCommand("tgconsole").setExecutor(new TGConsoleCommand());
+        // Регистрация команд Minecraft
+        getCommand("reg").setExecutor(new RegCommand(this));
+        getCommand("login").setExecutor(new LoginCommand(this));
+        getCommand("link").setExecutor(new LinkCommand(this));
+        getCommand("tgconsole").setExecutor(new TGConsoleCommand(this));
 
-        // Регистрировать слушатели событий
-        Bukkit.getPluginManager().registerEvents(new PlayerListener(), this);
+        // Регистрация слушателя событий
+        Bukkit.getPluginManager().registerEvents(new PlayerListener(this), this);
 
         getLogger().info("═══════════════════════════════════════");
         getLogger().info("✅ TelegramConsoleBot успешно загружен!");
-        getLogger().info("📁 Данные хранятся в: ATGCON/");
+        getLogger().info("📁 Данные хранятся в: plugins/TelegramConsoleBot/");
         getLogger().info("═══════════════════════════════════════");
     }
 
@@ -68,18 +62,21 @@ botManager = new BotManager(botToken, adminId, false, "TelegramConsoleBot");
         if (botManager != null) {
             botManager.stop();
         }
-        getLogger().info("❌ TelegramConsoleBot отключен");
     }
 
-    public static TelegramConsolePlugin getInstance() {
-        return instance;
-    }
+    public BotManager getBotManager() { return botManager; }
+    public DatabaseManager getDatabaseManager() { return databaseManager; }
+    public Map<String, UUID> getLinkCodes() { return linkCodes; }
 
-    public BotManager getBotManager() {
-        return botManager;
-    }
-
-    public DatabaseManager getDatabaseManager() {
-        return databaseManager;
+    public String generateLinkCode(UUID playerUUID) {
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        StringBuilder code = new StringBuilder();
+        Random rnd = new Random();
+        while (code.length() < 20) {
+            code.append(characters.charAt(rnd.nextInt(characters.length())));
+        }
+        String finalCode = code.toString();
+        linkCodes.put(finalCode, playerUUID);
+        return finalCode;
     }
 }
