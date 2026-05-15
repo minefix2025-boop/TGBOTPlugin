@@ -11,7 +11,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.security.MessageDigest;
-import java.util.*;
+import java.util.UUID;
 
 public class DatabaseManager {
     private final File dataFolder;
@@ -66,6 +66,9 @@ public class DatabaseManager {
         playerObj.addProperty("password", hashPassword(password));
         playerObj.addProperty("registered_at", System.currentTimeMillis());
         playerObj.addProperty("logged_in", false);
+        playerObj.addProperty("locked", false);
+        playerObj.addProperty("locked_until", 0);
+        playerObj.addProperty("telegram_id", 0);
         playerObj.add("ips", new JsonArray());
         playerObj.add("telegrams", new JsonArray());
 
@@ -88,11 +91,19 @@ public class DatabaseManager {
         if (hashPassword(password).equals(storedHash)) {
             playerObj.addProperty("logged_in", true);
             playerObj.addProperty("last_login", System.currentTimeMillis());
+            playerObj.addProperty("failed_attempts", 0);
             savePlayersData();
             return true;
         }
 
         return false;
+    }
+
+    public void setPlayerLoggedIn(String playerName, boolean loggedIn) {
+        if (playerExists(playerName)) {
+            playersData.getAsJsonObject(playerName).addProperty("logged_in", loggedIn);
+            savePlayersData();
+        }
     }
 
     public boolean isPlayerLoggedIn(String playerName) {
@@ -140,6 +151,70 @@ public class DatabaseManager {
         return true;
     }
 
+    // --- Новые добавленные методы для работы интеграции с ботом Telegram ---
+
+    public void setTelegramId(String playerName, long chatId) {
+        if (playerExists(playerName)) {
+            JsonObject playerObj = playersData.getAsJsonObject(playerName);
+            playerObj.addProperty("telegram_id", chatId);
+            
+            JsonArray telegrams = playerObj.getAsJsonArray("telegrams");
+            if (telegrams == null) {
+                telegrams = new JsonArray();
+                playerObj.add("telegrams", telegrams);
+            }
+            telegrams.add(chatId);
+            savePlayersData();
+        }
+    }
+
+    public long getTelegramId(String playerName) {
+        if (playerExists(playerName)) {
+            JsonObject playerObj = playersData.getAsJsonObject(playerName);
+            if (playerObj.has("telegram_id")) {
+                return playerObj.get("telegram_id").getAsLong();
+            }
+        }
+        return 0;
+    }
+
+    public void setLocked(String playerName, boolean lock) {
+        if (playerExists(playerName)) {
+            JsonObject playerObj = playersData.getAsJsonObject(playerName);
+            playerObj.addProperty("locked", lock);
+            if (lock) {
+                playerObj.addProperty("locked_until", System.currentTimeMillis() + 315360000000L); // Почти навсегда (10 лет)
+            } else {
+                playerObj.addProperty("locked_until", 0);
+                playerObj.addProperty("failed_attempts", 0);
+            }
+            savePlayersData();
+        }
+    }
+
+    public String getLastIp(String playerName) {
+        if (playerExists(playerName)) {
+            JsonObject playerObj = playersData.getAsJsonObject(playerName);
+            JsonArray ips = playerObj.getAsJsonArray("ips");
+            if (ips != null && ips.size() > 0) {
+                return ips.get(ips.size() - 1).getAsJsonObject().get("ip").getAsString();
+            }
+        }
+        return "Неизвестен";
+    }
+
+    public String getPlayerByTgId(long chatId) {
+        for (String name : playersData.keySet()) {
+            JsonObject obj = playersData.getAsJsonObject(name);
+            if (obj.has("telegram_id") && obj.get("telegram_id").getAsLong() == chatId) {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    // --- Конец добавленных методов ---
+
     public void recordLoginIP(String playerName, String ip) {
         if (playerExists(playerName)) {
             JsonObject playerObj = playersData.getAsJsonObject(playerName);
@@ -182,7 +257,7 @@ public class DatabaseManager {
         }
 
         JsonObject playerObj = playersData.getAsJsonObject(playerName);
-        if (!playerObj.get("locked").getAsBoolean()) {
+        if (!playerObj.has("locked") || !playerObj.get("locked").getAsBoolean()) {
             return false;
         }
 
