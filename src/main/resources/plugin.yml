@@ -1,8 +1,27 @@
 name: TelegramConsoleBot
-version: 1.0
+version: 13.0 
 main: com.example.telegramconsole.TelegramConsolePlugin
 api-version: 1.16
+author: Admin
+description: Управление консолью сервера через Telegram и защита аккаунтов с помощью 2FA.
+
 commands:
+  reg:
+    description: Регистрация нового аккаунта на сервере.
+    usage: /reg <пароль>
+  login:
+    description: Авторизация в свой аккаунт.
+    usage: /login <пароль>
   link:
-    description: Link your Telegram account
-    usage: /link <code>
+    description: Связать игровой аккаунт с Telegram ботом.
+    usage: /link
+  tgconsole:
+    description: Управление настройками плагина.
+    usage: /tgconsole <reload/token>
+    permission: tgconsole.admin
+    permission-message: §cУ вас нет прав на использование этой команды!
+
+permissions:
+  tgconsole.admin:
+    description: Полный доступ к управлению плагином TelegramConsoleBot.
+    default: op
