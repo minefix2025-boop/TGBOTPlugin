@@ -6,29 +6,18 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public class LinkCommand implements CommandExecutor {
+    private final TelegramConsolePlugin plugin;
+    public LinkCommand(TelegramConsolePlugin plugin) { this.plugin = plugin; }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Only players can use this command!");
+            sender.sendMessage("Команда только для игроков!");
             return true;
         }
-        
         Player player = (Player) sender;
-        
-        if (args.length != 1) {
-            player.sendMessage("§cUsage: /link <code>");
-            return true;
-        }
-        
-        String code = args[0];
-        boolean success = BotManager.linkAccount(player.getUniqueId().toString(), player.getName(), code);
-        
-        if (success) {
-            player.sendMessage("§a✓ Telegram account linked successfully!");
-        } else {
-            player.sendMessage("§c✗ Invalid or expired code!");
-        }
-        
+        String code = plugin.generateLinkCode(player.getUniqueId());
+        player.sendMessage("§6[TG] Отправьте этот код вашему Telegram-боту: §b" + code);
         return true;
     }
 }
