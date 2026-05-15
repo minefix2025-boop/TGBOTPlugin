@@ -1,44 +1,33 @@
 package com.example.telegramconsole;
 
-import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 
 public class PlayerListener implements Listener {
+    private final TelegramConsolePlugin plugin;
+    public PlayerListener(TelegramConsolePlugin plugin) { this.plugin = plugin; }
 
     @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        String playerName = event.getPlayer().getName();
-        String ip = event.getPlayer().getAddress() != null ? 
-                event.getPlayer().getAddress().getAddress().getHostAddress() : "Unknown";
-
-        DatabaseManager db = TelegramConsolePlugin.getInstance().getDatabaseManager();
-
-        if (!db.playerExists(playerName)) {
-            event.getPlayer().sendMessage("═══════════════════════════════════════");
-            event.getPlayer().sendMessage("🎉 Добро пожаловать на сервер!");
-            event.getPlayer().sendMessage("═══════════════════════════════════════");
-            event.getPlayer().sendMessage("📝 Сначала зарегистрируйся: /reg <пароль>");
-            event.getPlayer().sendMessage("════════════════════════════════════════");
-            return;
+    public void onLogin(PlayerLoginEvent event) {
+        Player p = event.getPlayer();
+        if (plugin.getDatabaseManager().isLocked(p.getUniqueId())) {
+            event.disallow(PlayerLoginEvent.Result.KICK_OTHER, "§c[TG] Ваш аккаунт заблокирован владельцем через Telegram!");
         }
-
-        if (db.isPlayerLocked(playerName)) {
-            event.getPlayer().kickPlayer("🚫 Ваш аккаунт заблокирован!\n📧 Свяжитесь с админом");
-            return;
-        }
-
-        event.getPlayer().sendMessage("✅ С возвращением! Используй /login <пароль>");
-        db.recordLoginIP(playerName, ip);
-
-        TelegramConsolePlugin.getInstance().getLogger().info("👤 Игрок " + playerName + " присоединился (IP: " + ip + ")");
     }
 
     @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        String playerName = event.getPlayer().getName();
-        TelegramConsolePlugin.getInstance().getLogger().info("👤 Игрок " + playerName + " отключился");
+    public void onJoin(PlayerJoinEvent event) {
+        Player p = event.getPlayer();
+        String ip = p.getAddress().getAddress().getHostAddress();
+        plugin.getDatabaseManager().setLastIp(p.getUniqueId(), ip);
+
+        if (!plugin.getDatabaseManager().isRegistered(p.getUniqueId())) {
+            p.sendMessage("§eДобро пожаловать! Пожалуйста, зарегистрируйтесь: /reg <пароль>");
+        } else {
+            p.sendMessage("§eПожалуйста, авторизуйтесь: /login <пароль>");
+        }
     }
 }
