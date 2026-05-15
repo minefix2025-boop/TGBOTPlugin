@@ -1,4 +1,7 @@
 package com.example.telegramconsole;
+import com.example.telegramconsole.commands.RegCommand;
+import com.example.telegramconsole.commands.LoginCommand;
+import com.example.telegramconsole.commands.TGConsoleCommand;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -35,8 +38,9 @@ public class TelegramConsolePlugin extends JavaPlugin {
             return;
         }
 
-        // Инициализировать Telegram бота
-        botManager = new BotManager(botToken, adminId);
+// Передайте нужные значения для boolean и String (например, false и "TelegramConsoleBot")
+botManager = new BotManager(botToken, adminId, false, "TelegramConsoleBot");
+
 
         if (botManager.start()) {
             getLogger().info("✅ Telegram бот запущен!");
