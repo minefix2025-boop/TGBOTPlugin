@@ -17,12 +17,13 @@ public class RegCommand implements CommandExecutor {
             p.sendMessage("§cИспользование: /reg <пароль>");
             return true;
         }
-        if (plugin.getDatabaseManager().isRegistered(p.getUniqueId())) {
+        if (plugin.getDatabaseManager().playerExists(p.getName())) {
             p.sendMessage("§cВы уже зарегистрированы! Используйте /login");
             return true;
         }
-        plugin.getDatabaseManager().register(p.getUniqueId(), args[0]);
-        p.sendMessage("§aВы успешно зарегистрировались! Теперь привяжите Telegram через /link");
+        plugin.getDatabaseManager().registerPlayer(p.getName(), args[0], p.getUniqueId().toString());
+        plugin.getDatabaseManager().setPlayerLoggedIn(p.getName(), true);
+        p.sendMessage("§aВы успешно зарегистрировались и вошли! Свяжите аккаунт через /link");
         return true;
     }
 }
