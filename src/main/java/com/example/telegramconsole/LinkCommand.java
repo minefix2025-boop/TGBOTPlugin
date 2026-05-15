@@ -16,7 +16,8 @@ public class LinkCommand implements CommandExecutor {
             return true;
         }
         Player player = (Player) sender;
-        String code = plugin.generateLinkCode(player.getUniqueId());
+        // Используем метод генерации кода из базы данных по имени игрока
+        String code = plugin.getDatabaseManager().generateLinkCode(player.getName());
         player.sendMessage("§6[TG] Отправьте этот код вашему Telegram-боту: §b" + code);
         return true;
     }
