@@ -13,8 +13,9 @@ public class PlayerListener implements Listener {
     @EventHandler
     public void onLogin(PlayerLoginEvent event) {
         Player p = event.getPlayer();
-        if (plugin.getDatabaseManager().isLocked(p.getUniqueId())) {
-            event.disallow(PlayerLoginEvent.Result.KICK_OTHER, "§c[TG] Ваш аккаунт заблокирован владельцем через Telegram!");
+        // Используем проверку блокировки по имени
+        if (plugin.getDatabaseManager().isPlayerLocked(p.getName())) {
+            event.disallow(PlayerLoginEvent.Result.KICK_OTHER, "§c[TG] Ваш аккаунт заблокирован владельцем через Telegram или из-за подбора пароля!");
         }
     }
 
@@ -22,9 +23,11 @@ public class PlayerListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         Player p = event.getPlayer();
         String ip = p.getAddress().getAddress().getHostAddress();
-        plugin.getDatabaseManager().setLastIp(p.getUniqueId(), ip);
+        // Записываем IP по имени
+        plugin.getDatabaseManager().recordLoginIP(p.getName(), ip);
 
-        if (!plugin.getDatabaseManager().isRegistered(p.getUniqueId())) {
+        // Проверяем существование аккаунта по имени
+        if (!plugin.getDatabaseManager().playerExists(p.getName())) {
             p.sendMessage("§eДобро пожаловать! Пожалуйста, зарегистрируйтесь: /reg <пароль>");
         } else {
             p.sendMessage("§eПожалуйста, авторизуйтесь: /login <пароль>");
