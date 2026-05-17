@@ -1,4 +1,4 @@
-package minefix.tgbotplugin;
+package com.minefix.tgbotplugin;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -13,7 +13,6 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.*;
 
-// ИСПРАВЛЕНО: Импортируем менеджер одобрений PendingApproval
 import com.example.telegramconsole.PendingApproval;
 
 public class TelegramBotImpl extends TelegramLongPollingBot {
@@ -78,7 +77,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                 return;
             }
 
-            // ИСПРАВЛЕНО: Исправлен путь до класса логирования (добавлен префикс com.)
             if (adminIds.contains(chatId) && !messageText.startsWith("/profile") && !messageText.startsWith("/link")) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     String cleanCommand = messageText.startsWith("/") ? messageText.substring(1) : messageText;
@@ -113,7 +111,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                         if (player != null) {
                             player.sendMessage("§aВход успешно подтвержден через Telegram!");
                             PluginMain.getMovementBlockListener().stopTimer(playerUuid);
-                            // ИСПРАВЛЕНО: PendingApproval теперь доступен
                             PendingApproval.remove(playerUuid);
                         }
                     });
@@ -122,7 +119,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                     plugin.getServer().getScheduler().runTask(plugin, () -> {
                         if (player != null) {
                             player.kickPlayer("§cНЕ потвержден через Telegram");
-                            // ИСПРАВЛЕНО: PendingApproval теперь доступен
                             PendingApproval.remove(playerUuid);
                         }
                     });
@@ -219,6 +215,7 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         
         InlineKeyboardButton unlockBtn = new InlineKeyboardButton();
         unlockBtn.setText("🔓 Разблокировать");
+        unlockBtn.setKeyboard(null); // Будет обновлено динамически кнопками
         unlockBtn.setCallbackData("unlock_" + targetUuid);
         
         row1.add(lockBtn);
