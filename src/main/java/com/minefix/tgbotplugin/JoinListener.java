@@ -12,10 +12,7 @@ public class JoinListener implements Listener {
         Player player = event.getPlayer();
         String nick = player.getName();
         
-        // Записываем IP-адрес игрока в базу данных при входе
         SqliteDataStore.updateLastIp(nick, player.getAddress().getAddress().getHostAddress());
-
-        // Запускаем таймер на авторизацию (/reg или /login), который кикнет, если игрок медлит
         PluginMain.getMovementBlockListener().startTimer(player);
     }
 }
