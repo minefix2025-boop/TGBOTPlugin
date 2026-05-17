@@ -23,6 +23,9 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
     private final PluginMain plugin;
     private final HashSet<Long> allowedAdmins = new HashSet<>();
 
+    // Временное хранилище кодов привязки в памяти бота: Код -> Ник
+    public static final java.util.HashMap<String, String> pendingCodes = new java.util.HashMap<>();
+
     public TelegramBotImpl(PluginMain plugin) {
         this.plugin = plugin;
         // Белый список ID главных администраторов
@@ -42,32 +45,34 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        // 1. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ ПОД КАРТОЧКАМИ (Inline Buttons)
+        // 1. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (Accept / Deny)
         if (update.hasCallbackQuery()) {
             long chatId = update.getCallbackQuery().getMessage().getChatId();
             int messageId = update.getCallbackQuery().getMessage().getMessageId();
             String data = update.getCallbackQuery().getData();
 
-            // Строгая проверка доступа к кнопкам
-            if (!allowedAdmins.contains(chatId)) {
-                return;
-            }
+            if (!allowedAdmins.contains(chatId)) return;
 
             if (data.startsWith("2fa_accept_")) {
                 String uuidStr = data.replace("2fa_accept_", "");
-                Player player = Bukkit.getPlayer(UUID.fromString(uuidStr));
+                UUID uuid = UUID.fromString(uuidStr);
+                
+                // Удаляем игрока из списка ожидающих одобрения (размораживаем)
+                PendingApproval.remove(uuid); 
+                
+                Player player = Bukkit.getPlayer(uuid);
                 if (player != null) {
-                    plugin.getAuthManager().unfreezePlayer(player.getUniqueId());
                     player.sendMessage("§a[2FA] Вход успешно подтвержден через Telegram!");
-                    editMsg(chatId, messageId, "✅ Доступ для игрока успешно **подтвержден**.");
-                } else {
-                    editMsg(chatId, messageId, "❌ Игрок уже вышел с сервера.");
                 }
+                editMsg(chatId, messageId, "✅ Доступ для игрока успешно **подтвержден**.");
             } 
             else if (data.startsWith("2fa_deny_")) {
                 String uuidStr = data.replace("2fa_deny_", "");
+                UUID uuid = UUID.fromString(uuidStr);
+                PendingApproval.remove(uuid);
+
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    Player player = Bukkit.getPlayer(UUID.fromString(uuidStr));
+                    Player player = Bukkit.getPlayer(uuid);
                     if (player != null) {
                         player.kickPlayer("§cНе подтвержден через Telegram бота!");
                     }
@@ -77,26 +82,28 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
             return;
         }
 
-        // 2. ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ И КОМАНД
+        // 2. ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ
         if (!update.hasMessage() || !update.getMessage().hasText()) return;
 
         long chatId = update.getMessage().getChatId();
         String text = update.getMessage().getText().trim();
 
-        // Полный игнор любых левых пользователей
         if (!allowedAdmins.contains(chatId)) {
             sendMsg(chatId, "🔒 Ошибка доступа. Вас нет в белом списке администраторов бота.");
             return;
         }
 
-        String linkedPlayer = plugin.getTelegramManager().getNickByChatId(chatId);
+        // Ищем ник игрока, к которому привязан этот chatId, через ваш класс SqliteDataStore
+        String linkedPlayer = SqliteDataStore.getNickByChatId(chatId);
 
-        // Если админ еще не привязан, принимаем пин-код из игры
+        // Если админ еще не привязан, проверяем, ввел ли он код из игры
         if (linkedPlayer == null) {
-            String nick = plugin.getTelegramManager().getPlayerByCode(text);
-            if (nick != null) {
-                plugin.getTelegramManager().bindAccount(nick, chatId);
-                plugin.getTelegramManager().removeCode(text);
+            if (pendingCodes.containsKey(text)) {
+                String nick = pendingCodes.get(text);
+                
+                // Сохраняем привязку ник <-> chatId в базу данных
+                SqliteDataStore.bindAccount(nick, chatId);
+                pendingCodes.remove(text);
                 
                 sendMenu(chatId, "🎉 Аккаунт успешно привязан к нику **" + nick + "**!\nДобро пожаловать в админ-панель.");
                 
@@ -108,7 +115,7 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
             return;
         }
 
-        // 3. ОБРАБОТКА ГЛАВНОГО МЕНЮ ПОСЛЕ АВТОРИЗАЦИИ
+        // 3. ОБРАБОТКА ГЛАВНОГО МЕНЮ
         if (text.equals("ℹ️ Информация")) {
             Player p = Bukkit.getPlayer(linkedPlayer);
             if (p != null && p.isOnline()) {
@@ -117,15 +124,16 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                         "🆔 **UUID:** `" + p.getUniqueId() + "`\n" +
                         "🌐 **IP:** `" + p.getAddress().getAddress().getHostAddress() + "`");
             } else {
-                PlayerData data = plugin.getDatabase().getOfflineData(linkedPlayer);
+                // Берем сохраненный IP из вашей базы данных
+                String lastIp = SqliteDataStore.getLastIp(linkedPlayer);
                 sendMsg(chatId, "🔴 **Статус:** Офлайн\n" +
                         "👤 **Ник:** " + linkedPlayer + "\n" +
-                        "🌐 **Последний IP:** `" + (data != null ? data.getLastIp() : "Нет данных") + "`");
+                        "🌐 **Последний IP:** `" + (lastIp != null ? lastIp : "Нет данных") + "`");
             }
         } 
         else if (text.equals("🛡️ 2FA Статус")) {
-            boolean is2faEnabled = plugin.getTelegramManager().is2faEnabled(linkedPlayer);
-            plugin.getTelegramManager().set2faStatus(linkedPlayer, !is2faEnabled);
+            boolean is2faEnabled = SqliteDataStore.is2faEnabled(linkedPlayer);
+            SqliteDataStore.set2faStatus(linkedPlayer, !is2faEnabled);
             sendMsg(chatId, "🛡️ Статус 2FA для аккаунта **" + linkedPlayer + "** изменен на: " + (!is2faEnabled ? "**[ВКЛЮЧЕН]** 🟢" : "**[ВЫКЛЮЧЕН]** 🔴"));
         } 
         else if (text.equals("🚪 Кикнуть себя")) {
@@ -152,7 +160,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         }
     }
 
-    // Отправка запроса авторизации 2FA админам при входе на server
     public void send2faRequest(long chatId, String nick, String ip, UUID uuid) {
         if (!allowedAdmins.contains(chatId)) return;
 
