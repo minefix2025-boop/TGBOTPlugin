@@ -1,4 +1,4 @@
-package example.telegramconsole;
+package com.example.telegramconsole;
 
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -12,10 +12,8 @@ public class TelegramConsolePlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // Создаем менеджер базы данных для логирования команд консоли
         this.databaseManager = new DatabaseManager(this);
         
-        // Создаем и запускаем бота консоли
         this.botManager = new BotManager(this);
         this.botManager.startBot();
 
@@ -23,7 +21,7 @@ public class TelegramConsolePlugin extends JavaPlugin {
             this.getCommand("tgconsole").setExecutor(new TGConsoleCommand());
         }
 
-        getLogger().info("Модуль TelegramConsole успешно запущен!");
+        getLogger().info("TelegramConsole модуль успешно активирован!");
     }
 
     @Override
@@ -31,7 +29,7 @@ public class TelegramConsolePlugin extends JavaPlugin {
         if (botManager != null) {
             botManager.stopBot();
         }
-        getLogger().info("Модуль TelegramConsole отключен.");
+        getLogger().info("TelegramConsole модуль выключен.");
     }
 
     public static TelegramConsolePlugin getInstance() {
