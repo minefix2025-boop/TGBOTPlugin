@@ -4,21 +4,18 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import java.util.UUID;
-
-// ИСПРАВЛЕНО: Добавлен недостающий импорт
-import com.minefix.tgbotplugin.DataStore;
 
 public class JoinListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        UUID uuid = player.getUniqueId();
+        String nick = player.getName();
+        
+        // Записываем IP-адрес игрока в базу данных при входе
+        SqliteDataStore.updateLastIp(nick, player.getAddress().getAddress().getHostAddress());
 
-        if (DataStore.isPlayerBlocked(uuid)) {
-            event.setJoinMessage(null);
-            player.kickPlayer("§cВаш аккаунт заблокирован администратором через Telegram!");
-        }
+        // Запускаем таймер на авторизацию (/reg или /login), который кикнет, если игрок медлит
+        PluginMain.getMovementBlockListener().startTimer(player);
     }
 }
