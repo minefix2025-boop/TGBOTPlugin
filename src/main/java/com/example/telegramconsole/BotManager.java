@@ -1,147 +1,108 @@
-package com.example.telegramconsole;
+package example.telegramconsole;
 
 import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
-public class BotManager extends TelegramLongPollingBot {
+public class BotManager {
 
-    private final String token;
-    private final long adminId;
-    private final TelegramConsolePlugin plugin;
-    private TelegramBotsApi botsApi;
+    private final JavaPlugin plugin;
+    private ConsoleBotInstance botInstance;
 
-    public BotManager(String token, long adminId, TelegramConsolePlugin plugin) {
-        this.token = token;
-        this.adminId = adminId;
+    public BotManager(JavaPlugin plugin) {
         this.plugin = plugin;
     }
 
-    public boolean start() {
+    public void startBot() {
         try {
-            this.botsApi = new TelegramBotsApi(DefaultBotSession.class);
-            this.botsApi.registerBot(this);
-            return true;
-        } catch (TelegramApiException e) {
+            TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
+            this.botInstance = new ConsoleBotInstance(plugin);
+            botsApi.registerBot(botInstance);
+            plugin.getLogger().info("[ConsoleBot] Успешно запущен!");
+        } catch (Exception e) {
+            plugin.getLogger().severe("[ConsoleBot] Ошибка старта: " + e.getMessage());
             e.printStackTrace();
-            return false;
         }
     }
 
-    public void stop() {}
-
-    @Override
-    public String getBotUsername() {
-        return "MinecraftConsoleBot";
+    public void stopBot() {
+        this.botInstance = null;
     }
 
-    @Override
-    public String getBotToken() {
-        return this.token;
-    }
+    private static class ConsoleBotInstance extends TelegramLongPollingBot {
 
-    @Override
-    public void onUpdateReceived(Update update) {
-        if (update.hasMessage() && update.getMessage().hasText()) {
-            String text = update.getMessage().getText();
-            long chatId = update.getMessage().getChatId();
+        private final JavaPlugin plugin;
+        // Твой токен и список администраторов
+        private final String token = "8629251193:AAErpWdzt_vNpkfhlxN8aiXlLgWkfM7h5QQ";
+        private final Set<String> allowedAdmins = new HashSet<>(Arrays.asList("6343309173", "7742036100"));
 
-            if (chatId == adminId && text.startsWith("/cmd ")) {
-                String cmd = text.substring(5);
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-                    sendMsg(adminId, success ? "✅ Команда передана в консоль!" : "❌ Ошибка выполнения.");
-                });
-                return;
-            }
+        public ConsoleBotInstance(JavaPlugin plugin) {
+            this.plugin = plugin;
+        }
 
-            if (text.equals("/link")) {
-                sendMsg(chatId, "Пропишите /link на сервере Майнкрафт и отправьте сгенерированный код сюда.");
-                return;
-            }
+        @Override
+        public String getBotUsername() {
+            return "MinecraftConsoleBot";
+        }
 
-            // Обработка текстового кода привязки через JSON-метод
-            String linkedPlayer = plugin.getDatabaseManager().getPlayerByTgId(chatId);
-            if (linkedPlayer == null && text.length() == 20) {
-                for (Player player : Bukkit.getOnlinePlayers()) {
-                    if (plugin.getDatabaseManager().linkPlayerToTelegram(player.getName(), text.toUpperCase())) {
-                        plugin.getDatabaseManager().setTelegramId(player.getName(), chatId);
-                        sendMsg(chatId, "✅ Успешное подключение к вашему аккаунту: " + player.getName());
-                        player.sendMessage("§a[TG] Профиль привязан к Telegram!");
-                        showAccountMenu(chatId, player.getName());
-                        return;
-                    }
+        @Override
+        public String getBotToken() {
+            return this.token;
+        }
+
+        @Override
+        public void onUpdateReceived(Update update) {
+            if (update.hasMessage() && update.getMessage().hasText()) {
+                String text = update.getMessage().getText();
+                String chatId = update.getMessage().getChatId().toString();
+
+                // Проверка прав: только указанные админы могут писать команды
+                if (!allowedAdmins.contains(chatId)) {
+                    sendReply(chatId, "❌ Отказано в доступе к консоли сервера.");
+                    return;
                 }
-                sendMsg(chatId, "❌ Неверный или истекший код привязки.");
-                return;
-            }
 
-            sendMsg(chatId, "🤖 Доступные команды: /link\nАдминистраторам: /cmd <команда>");
-        } else if (update.hasCallbackQuery()) {
-            String data = update.getCallbackQuery().getData();
-            long chatId = update.getCallbackQuery().getMessage().getChatId();
+                // Выполнение консольной команды в основном потоке Minecraft
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    try {
+                        // Убираем слэш в начале, если админ его случайно написал
+                        String commandToExecute = text.startsWith("/") ? text.substring(1) : text;
+                        
+                        // Логируем выполнение команды в базу данных модуля консоли
+                        TelegramConsolePlugin.getInstance().getDatabaseManager().logCommand(chatId, commandToExecute);
 
-            if (data.startsWith("status_")) {
-                String name = data.substring(7);
-                String ip = plugin.getDatabaseManager().getLastIp(name);
-                sendMsg(chatId, "📊 Аккаунт " + name + ":\n• Последний IP: " + ip + "\n• Защита 2FA: Активна");
-            } else if (data.startsWith("lock_")) {
-                String name = data.substring(5);
-                plugin.getDatabaseManager().setLocked(name, true);
-                sendMsg(chatId, "🔒 Аккаунт " + name + " заморожен. Вход невозможен.");
-            } else if (data.startsWith("unlock_")) {
-                String name = data.substring(7);
-                plugin.getDatabaseManager().setLocked(name, false);
-                sendMsg(chatId, "🔓 Аккаунт " + name + " разблокирован.");
-            } else if (data.startsWith("kick_")) {
-                String name = data.substring(5);
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    Player p = Bukkit.getPlayer(name);
-                    if (p != null) p.kickPlayer("§cВы были кикнуты владельцем через Telegram!");
+                        // Отправляем команду в серверную консоль
+                        boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandToExecute);
+                        
+                        if (success) {
+                            sendReply(chatId, "💻 Команда `/" + commandToExecute + "` успешно выполнена на сервере.");
+                        } else {
+                            sendReply(chatId, "⚠️ Сервер не смог обработать команду: `/" + commandToExecute + "`");
+                        }
+                    } catch (Exception e) {
+                        sendReply(chatId, "🛑 Ошибка при выполнении команды: " + e.getMessage());
+                    }
                 });
-                sendMsg(chatId, "⚡ Игрок " + name + " кикнут.");
             }
         }
-    }
 
-    public void sendMsg(long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(text);
-        try { execute(message); } catch (TelegramApiException e) { e.printStackTrace(); }
-    }
-
-    public void showAccountMenu(long chatId, String playerName) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText("⚙️ Управление аккаунтом " + playerName + ":");
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        List<InlineKeyboardButton> row1 = new ArrayList<>();
-        InlineKeyboardButton btn1 = new InlineKeyboardButton(); btn1.setText("📊 Инфо/IP"); btn1.setCallbackData("status_" + playerName);
-        InlineKeyboardButton btn2 = new InlineKeyboardButton(); btn2.setText("⚡ Кикнуть"); btn2.setCallbackData("kick_" + playerName);
-        row1.add(btn1); row1.add(btn2);
-
-        List<InlineKeyboardButton> row2 = new ArrayList<>();
-        InlineKeyboardButton btn3 = new InlineKeyboardButton(); btn3.setText("🔒 Залочить"); btn3.setCallbackData("lock_" + playerName);
-        InlineKeyboardButton btn4 = new InlineKeyboardButton(); btn4.setText("🔓 Разлочить"); btn4.setCallbackData("unlock_" + playerName);
-        row2.add(btn3); row2.add(btn4);
-
-        rows.add(row1); rows.add(row2);
-        markup.setKeyboard(rows);
-        message.setReplyMarkup(markup);
-        try { execute(message); } catch (TelegramApiException e) { e.printStackTrace(); }
+        private void sendReply(String chatId, String message) {
+            SendMessage sm = new SendMessage();
+            sm.setChatId(chatId);
+            sm.setText(message);
+            try {
+                execute(sm);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
