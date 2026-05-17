@@ -1,177 +1,145 @@
-package com.minefix.tgbotplugin;
-
-import org.bukkit.plugin.java.JavaPlugin;
+package minefix.tgbotplugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.sql.*;
-import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import org.bukkit.plugin.java.JavaPlugin;
 
-public class SqliteDataStore implements DataStore {
-    private final JavaPlugin plugin;
-    private Connection conn;
+public class SqliteDataStore {
 
-    public SqliteDataStore(JavaPlugin plugin) { this.plugin = plugin; }
+    private Connection connection;
+    private final Map<String, UUID> tempCodes = new HashMap<>(); // Код -> UUID
 
-    @Override
-    public void init() {
-        try {
-            File dbFile = new File(plugin.getDataFolder(), "players.db");
-            plugin.getDataFolder().mkdirs();
-            String url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
-            conn = DriverManager.getConnection(url);
-            try (Statement s = conn.createStatement()) {
-                s.execute("CREATE TABLE IF NOT EXISTS players(uuid TEXT PRIMARY KEY, name TEXT, password TEXT, telegram_chat BIGINT, authorized INTEGER, locked INTEGER, last_ip TEXT)");
-                s.execute("CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY, uuid TEXT, ip TEXT, expires_at INTEGER, created_at INTEGER)");
-                s.execute("CREATE TABLE IF NOT EXISTS link_codes(code TEXT PRIMARY KEY, uuid TEXT, expires_at INTEGER)");
+    public SqliteDataStore(JavaPlugin plugin) {
+        File dataFolder = new File(plugin.getDataFolder(), "database.db");
+        if (!dataFolder.exists()) {
+            try {
+                dataFolder.createNewFile();
+            } catch (IOException e) {
+                plugin.getLogger().severe("Не удалось создать файл базы данных SQLite!");
             }
-        } catch (SQLException ex) {
-            plugin.getLogger().severe("Не удалось подключиться к SQLite: " + ex.getMessage());
+        }
+
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection("jdbc:sqlite:" + dataFolder.getAbsolutePath());
+            createTables();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    @Override
-    public void close() {
-        try { if (conn != null) conn.close(); } catch (SQLException ignored) {}
+    private void createTables() {
+        String sql = "CREATE TABLE IF NOT EXISTS players (" +
+                     "uuid TEXT PRIMARY KEY," +
+                     "password TEXT," +
+                     "tg_chat_id TEXT," +
+                     "is_blocked INTEGER DEFAULT 0" +
+                     ");";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
-    @Override
-    public synchronized boolean isRegistered(UUID uuid) {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM players WHERE uuid = ?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
+    public boolean isRegistered(UUID uuid) {
+        String sql = "SELECT uuid FROM players WHERE uuid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, uuid.toString());
+            ResultSet rs = pstmt.executeQuery();
+            return rs.next();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return false;
     }
 
-    @Override
-    public synchronized void savePlayerPassword(UUID uuid, String name, String bcryptHash) {
-        try (PreparedStatement ps = conn.prepareStatement("INSERT OR REPLACE INTO players(uuid,name,password,authorized,locked) VALUES(?,?,?,?,?)")) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, name);
-            ps.setString(3, bcryptHash);
-            ps.setInt(4, 1);
-            ps.setInt(5, 0);
-            ps.executeUpdate();
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-    }
-
-    @Override
-    public synchronized PlayerData getPlayerData(UUID uuid) {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT uuid,name,password,telegram_chat,locked FROM players WHERE uuid = ?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                String name = rs.getString("name");
-                String pass = rs.getString("password");
-                long chat = rs.getLong("telegram_chat");
-                boolean hasChat = !rs.wasNull();
-                boolean locked = rs.getInt("locked") != 0;
-                return new PlayerData(uuid, name, pass, hasChat ? chat : null, locked);
-            }
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-        return null;
-    }
-
-    @Override
-    public synchronized void setAuthorized(UUID uuid, boolean authorized) {
-        try (PreparedStatement ps = conn.prepareStatement("UPDATE players SET authorized = ? WHERE uuid = ?")) {
-            ps.setInt(1, authorized ? 1 : 0);
-            ps.setString(2, uuid.toString());
-            ps.executeUpdate();
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-    }
-
-    @Override
-    public synchronized boolean isAuthorized(UUID uuid) {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT authorized FROM players WHERE uuid = ?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) { if (rs.next()) return rs.getInt("authorized") != 0; }
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
+    public boolean registerPlayer(UUID uuid, String password) {
+        String sql = "INSERT INTO players(uuid, password) VALUES(?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, uuid.toString());
+            pstmt.setString(2, password);
+            pstmt.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return false;
     }
 
-    @Override
-    public void registerFailedAttempt(UUID uuid) {
-        // stub: could implement counters and lock
+    public boolean checkPassword(UUID uuid, String password) {
+        String sql = "SELECT password FROM players WHERE uuid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, uuid.toString());
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getString("password").equals(password);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 
-    @Override
-    public synchronized String createLoginApproval(UUID uuid, String ip, long ttlSeconds) {
-        String id = UUID.randomUUID().toString();
-        long expires = Instant.now().getEpochSecond() + ttlSeconds;
-        try (PreparedStatement ps = conn.prepareStatement("INSERT INTO approvals(id,uuid,ip,expires_at,created_at) VALUES(?,?,?,?,?)")) {
-            ps.setString(1, id);
-            ps.setString(2, uuid.toString());
-            ps.setString(3, ip);
-            ps.setLong(4, expires);
-            ps.setLong(5, Instant.now().getEpochSecond());
-            ps.executeUpdate();
-            return id;
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
+    public void saveTempLinkCode(UUID uuid, String code) {
+        tempCodes.put(code, uuid);
+    }
+
+    public UUID getPlayerByLinkCode(String code) {
+        return tempCodes.remove(code); // Код одноразовый, удаляем после проверки
+    }
+
+    public void bindTelegram(UUID uuid, String chatId) {
+        String sql = "UPDATE players SET tg_chat_id = ? WHERE uuid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, chatId);
+            pstmt.setString(2, uuid.toString());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public String getTelegramChatId(UUID uuid) {
+        String sql = "SELECT tg_chat_id FROM players WHERE uuid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, uuid.toString());
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getString("tg_chat_id");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
-    @Override
-    public synchronized PendingApproval getApprovalById(String id) {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT id,uuid,ip,expires_at FROM approvals WHERE id = ?")) {
-            ps.setString(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                String ip = rs.getString("ip");
-                long expires = rs.getLong("expires_at");
-                return new PendingApproval(id, uuid, null, ip, expires);
-            }
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-        return null;
+    public void setPlayerBlocked(UUID uuid, boolean blocked) {
+        String sql = "UPDATE players SET is_blocked = ? WHERE uuid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, blocked ? 1 : 0);
+            pstmt.setString(2, uuid.toString());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
-    @Override
-    public synchronized void completeApproval(String id, boolean accepted) {
-        try {
-            if (accepted) {
-                PendingApproval p = getApprovalById(id);
-                if (p != null) setAuthorized(p.getPlayerUuid(), true);
+    public boolean isPlayerBlocked(UUID uuid) {
+        String sql = "SELECT is_blocked FROM players WHERE uuid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, uuid.toString());
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt("is_blocked") == 1;
             }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM approvals WHERE id = ?")) {
-                ps.setString(1, id);
-                ps.executeUpdate();
-            }
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-    }
-
-    @Override
-    public synchronized String createLinkCode(UUID uuid, long ttlSeconds) {
-        String code = UUID.randomUUID().toString().substring(0, 8);
-        long expires = Instant.now().getEpochSecond() + ttlSeconds;
-        try (PreparedStatement ps = conn.prepareStatement("INSERT INTO link_codes(code,uuid,expires_at) VALUES(?,?,?)")) {
-            ps.setString(1, code);
-            ps.setString(2, uuid.toString());
-            ps.setLong(3, expires);
-            ps.executeUpdate();
-            return code;
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-        return null;
-    }
-
-    @Override
-    public synchronized UUID consumeLinkCode(String code) {
-        try (PreparedStatement ps = conn.prepareStatement("SELECT uuid,expires_at FROM link_codes WHERE code = ?")) {
-            ps.setString(1, code);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                long expires = rs.getLong("expires_at");
-                if (Instant.now().getEpochSecond() > expires) {
-                    // expired
-                    try (PreparedStatement d = conn.prepareStatement("DELETE FROM link_codes WHERE code = ?")) { d.setString(1, code); d.executeUpdate(); }
-                    return null;
-                }
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                try (PreparedStatement d = conn.prepareStatement("DELETE FROM link_codes WHERE code = ?")) { d.setString(1, code); d.executeUpdate(); }
-                return uuid;
-            }
-        } catch (SQLException e) { plugin.getLogger().warning(e.getMessage()); }
-        return null;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }
