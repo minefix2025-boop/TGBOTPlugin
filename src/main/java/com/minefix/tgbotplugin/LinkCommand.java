@@ -1,4 +1,4 @@
-package minefix.tgbotplugin;
+package com.minefix.tgbotplugin;
 
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -18,17 +18,14 @@ public class LinkCommand implements CommandExecutor {
             return true;
         }
 
-        Player player = sender.getPlayer();
+        // ИСПРАВЛЕНО: Явное приведение типов вместо несуществующего метода sender.getPlayer()
+        Player player = (Player) sender;
         
-        // Генерация случайного 6-значного кода
         String code = String.valueOf(100000 + new Random().nextInt(900000));
-        
-        // Сохраняем код в DataStore для последующей проверки в боте
         DataStore.saveTempLinkCode(player.getUniqueId(), code);
 
         player.sendMessage("§aВаш код для привязки Telegram сгенерирован!");
         
-        // Создание кликабельного компонента текста
         TextComponent message = new TextComponent("§eНажмите СЮДА, чтобы скопировать код: §b§l" + code);
         message.setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, code));
         
