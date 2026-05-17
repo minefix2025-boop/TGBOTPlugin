@@ -1,100 +1,105 @@
-package com.example.telegramconsole;
+package com.minefix.tgbotplugin;
 
-import org.bukkit.Location;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 
 import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 public class MovementBlockListener implements Listener {
 
-    private final TelegramConsolePlugin plugin;
-    private final Map<UUID, BukkitTask> activeTimers = new HashMap<>();
+    // Хранилище запущенных таймеров для кика неавторизованных игроков
+    private final HashMap<UUID, Integer> authTimers = new HashMap<>();
 
-    public MovementBlockListener(TelegramConsolePlugin plugin) {
-        this.plugin = plugin;
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        boolean isRegistered = plugin.getDatabaseManager().playerExists(player.getName());
-        startAuthTimer(player, isRegistered);
-    }
-
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        stopTimer(event.getPlayer().getUniqueId());
-        PendingApproval.remove(event.getPlayer().getUniqueId());
-    }
-
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-
-        // Если игрок в списке таймера (не авторизован) — отменяем ходьбу и вращение головой
-        if (activeTimers.containsKey(uuid)) {
-            Location from = event.getFrom();
-            Location to = event.getTo();
-            
-            if (to != null && (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ() 
-                    || from.getYaw() != to.getYaw() || from.getPitch() != to.getPitch())) {
-                event.setTo(from); 
-            }
-        }
-    }
-
-    private void startAuthTimer(Player player, boolean isRegistered) {
+    // Метод запуска таймера (игрок должен войти за 60 секунд)
+    public void startTimer(Player player) {
         UUID uuid = player.getUniqueId();
         
-        BukkitTask task = new BukkitRunnable() {
-            int timeLeft = 20;
+        // Отменяем старый таймер, если он почему-то был
+        stopTimer(uuid);
+
+        int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(PluginMain.getInstance(), new Runnable() {
+            int secondsLeft = 60;
 
             @Override
             public void run() {
                 if (!player.isOnline()) {
-                    cancel();
-                    activeTimers.remove(uuid);
+                    stopTimer(uuid);
                     return;
                 }
 
-                if (timeLeft <= 0) {
-                    cancel();
-                    activeTimers.remove(uuid);
+                // Если игрок уже зарегистрировался/вошел и НЕ ждет 2FA, глушим таймер
+                if (DataStore.isRegistered(uuid) && !PendingApproval.contains(uuid)) {
+                    stopTimer(uuid);
+                    return;
+                }
+
+                if (secondsLeft <= 0) {
                     player.kickPlayer("§cВремя на авторизацию истекло!");
-                    return;
-                }
-
-                // Логика проверки: если игрок уже ввел верный пароль и ждет клика кнопок 2FA в ТГ
-                if (PendingApproval.isAwaiting(uuid)) {
-                    player.sendMessage("§6[2FA] Подтвердите вход в вашем Telegram-боте! Осталось: " + timeLeft + " сек.");
+                    stopTimer(uuid);
                 } else {
-                    if (isRegistered) {
-                        player.sendMessage("§cАвторизуйтесь! Осталось на регистратцию " + timeLeft + " сек регистрация: /login <Пароль>");
-                    } else {
-                        player.sendMessage("§cЗарегистрируйтесь! Осталось на регистратцию " + timeLeft + " сек регистрация: /reg <Пароль>");
+                    if (secondsLeft % 20 == 0 || secondsLeft <= 10) {
+                        if (!DataStore.isRegistered(uuid)) {
+                            player.sendMessage("§cПожалуйста, авторизуйтесь: /reg <пароль> или /login <пароль> (" + secondsLeft + " сек)");
+                        } else if (PendingApproval.contains(uuid)) {
+                            player.sendMessage("§eОжидание подтверждения входа через Telegram... (" + secondsLeft + " сек)");
+                        }
                     }
+                    secondsLeft--;
                 }
-
-                timeLeft -= 3;
             }
-        }.runTaskTimer(plugin, 0L, 60L); // 60 тиков = 3 секунды
+        }, 0L, 20L); // Повторяем каждую секунду (20 тиков)
 
-        activeTimers.put(uuid, task);
+        authTimers.put(uuid, taskId);
     }
 
+    // Метод остановки таймера кика
     public void stopTimer(UUID uuid) {
-        if (activeTimers.containsKey(uuid)) {
-            activeTimers.get(uuid).cancel();
-            activeTimers.remove(uuid);
+        if (authTimers.containsKey(uuid)) {
+            Bukkit.getScheduler().cancelTask(authTimers.get(uuid));
+            authTimers.remove(uuid);
+        }
+    }
+
+    @EventHandler
+    public void onMove(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        // Блокируем ходьбу, если игрок не вошел в аккаунт ИЛИ ждет 2FA клика в Telegram
+        if (!DataStore.isRegistered(uuid) || PendingApproval.contains(uuid)) {
+            event.setTo(event.getFrom());
+        }
+    }
+
+    @EventHandler
+    public void onChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        if (!DataStore.isRegistered(uuid) || PendingApproval.contains(uuid)) {
+            event.setCancelled(true);
+            player.sendMessage("§c❌ Вы не можете писать в чат до полной авторизации!");
+        }
+    }
+
+    @EventHandler
+    public void onCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+        String message = event.getMessage().toLowerCase();
+
+        // Разрешаем только команды авторизации, остальные блокируем
+        if (!DataStore.isRegistered(uuid) || PendingApproval.contains(uuid)) {
+            if (!message.startsWith("/login ") && !message.startsWith("/reg ")) {
+                event.setCancelled(true);
+                player.sendMessage("§c❌ Использование команд заблокировано до подтверждения входа!");
+            }
         }
     }
 }
