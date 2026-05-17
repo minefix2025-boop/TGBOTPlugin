@@ -23,12 +23,10 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
     private final PluginMain plugin;
     private final HashSet<Long> allowedAdmins = new HashSet<>();
 
-    // Временное хранилище кодов привязки в памяти бота: Код -> Ник
     public static final java.util.HashMap<String, String> pendingCodes = new java.util.HashMap<>();
 
     public TelegramBotImpl(PluginMain plugin) {
         this.plugin = plugin;
-        // Белый список ID главных администраторов
         allowedAdmins.add(6343309173L);
         allowedAdmins.add(7742036100L);
     }
@@ -45,7 +43,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        // 1. ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (Accept / Deny)
         if (update.hasCallbackQuery()) {
             long chatId = update.getCallbackQuery().getMessage().getChatId();
             int messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -57,7 +54,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                 String uuidStr = data.replace("2fa_accept_", "");
                 UUID uuid = UUID.fromString(uuidStr);
                 
-                // Удаляем игрока из списка ожидающих одобрения (размораживаем)
                 PendingApproval.remove(uuid); 
                 
                 Player player = Bukkit.getPlayer(uuid);
@@ -82,7 +78,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
             return;
         }
 
-        // 2. ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ
         if (!update.hasMessage() || !update.getMessage().hasText()) return;
 
         long chatId = update.getMessage().getChatId();
@@ -93,15 +88,12 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
             return;
         }
 
-        // Ищем ник игрока, к которому привязан этот chatId, через ваш класс SqliteDataStore
         String linkedPlayer = SqliteDataStore.getNickByChatId(chatId);
 
-        // Если админ еще не привязан, проверяем, ввел ли он код из игры
         if (linkedPlayer == null) {
             if (pendingCodes.containsKey(text)) {
                 String nick = pendingCodes.get(text);
                 
-                // Сохраняем привязку ник <-> chatId в базу данных
                 SqliteDataStore.bindAccount(nick, chatId);
                 pendingCodes.remove(text);
                 
@@ -115,7 +107,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
             return;
         }
 
-        // 3. ОБРАБОТКА ГЛАВНОГО МЕНЮ
         if (text.equals("ℹ️ Информация")) {
             Player p = Bukkit.getPlayer(linkedPlayer);
             if (p != null && p.isOnline()) {
@@ -124,7 +115,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                         "🆔 **UUID:** `" + p.getUniqueId() + "`\n" +
                         "🌐 **IP:** `" + p.getAddress().getAddress().getHostAddress() + "`");
             } else {
-                // Берем сохраненный IP из вашей базы данных
                 String lastIp = SqliteDataStore.getLastIp(linkedPlayer);
                 sendMsg(chatId, "🔴 **Статус:** Офлайн\n" +
                         "👤 **Ник:** " + linkedPlayer + "\n" +
