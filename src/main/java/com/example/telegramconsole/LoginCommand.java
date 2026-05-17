@@ -30,16 +30,14 @@ public class LoginCommand implements CommandExecutor {
             return true;
         }
 
+        // Передаем первый аргумент массива args[0]
         if (plugin.getDatabaseManager().loginPlayer(p.getName(), args[0])) {
             long tgId = plugin.getDatabaseManager().getTelegramId(p.getName());
             if (tgId != 0) {
                 p.sendMessage("§6[2FA] Подтвердите вход в Telegram боте! Вы временно обездвижены.");
-                
-                // Запускаем интерактивный запрос 2FA с кнопками Принять/Отказать
                 plugin.getBotManager().send2FARequest(p, tgId);
             } else {
                 p.sendMessage("§aВход успешен! Защитите свой профиль: /link");
-                // Если ТГ нет — полностью снимаем ограничения на движение и отключаем таймер
                 plugin.getMovementBlockListener().stopTimer(p.getUniqueId());
             }
         } else {
