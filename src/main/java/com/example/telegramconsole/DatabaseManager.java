@@ -1,4 +1,4 @@
-package example.telegramconsole;
+package com.example.telegramconsole;
 
 import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
