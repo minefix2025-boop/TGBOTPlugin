@@ -1,4 +1,4 @@
-package minefix.tgbotplugin;
+package com.example.telegramconsole;
 
 import java.util.HashSet;
 import java.util.Set;
