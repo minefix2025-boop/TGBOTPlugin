@@ -1,4 +1,4 @@
-package minefix.tgbotplugin;
+package com.minefix.tgbotplugin;
 
 import java.util.UUID;
 
