@@ -33,7 +33,6 @@ public class AuthCommand implements CommandExecutor {
 
             DataStore.registerPlayer(uuid, password);
             player.sendMessage("§aВы успешно зарегистрировались!");
-            // Отключаем таймер кика, который запустился при входе
             PluginMain.getMovementBlockListener().stopTimer(uuid);
 
         } else if (label.equalsIgnoreCase("login")) {
@@ -51,10 +50,8 @@ public class AuthCommand implements CommandExecutor {
             if (tgChatId != null) {
                 player.sendMessage("§eПароль верен! Подтвердите вход в вашем Telegram-боте...");
                 
-                // Добавляем в локальный список заморозки (2FA) внутри нашего пакета
-                PendingApproval.add(uuid);
-                
-                // Отправляем пуш-уведомление с кнопками в Telegram-бот
+                // Используем локальный класс заморозки для 2FA
+                com.minefix.tgbotplugin.PendingApproval.add(uuid);
                 PluginMain.getInstance().getBot().send2FARequest(player);
             } else {
                 player.sendMessage("§aВы успешно авторизовались!");
