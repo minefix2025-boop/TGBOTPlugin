@@ -1,4 +1,4 @@
-package minefix.tgbotplugin;
+package com.minefix.tgbotplugin;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,7 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class SqliteDataStore {
 
     private Connection connection;
-    private final Map<String, UUID> tempCodes = new HashMap<>(); // Код -> UUID
+    private final Map<String, UUID> tempCodes = new HashMap<>();
 
     public SqliteDataStore(JavaPlugin plugin) {
         File dataFolder = new File(plugin.getDataFolder(), "database.db");
@@ -90,7 +90,7 @@ public class SqliteDataStore {
     }
 
     public UUID getPlayerByLinkCode(String code) {
-        return tempCodes.remove(code); // Код одноразовый, удаляем после проверки
+        return tempCodes.remove(code);
     }
 
     public void bindTelegram(UUID uuid, String chatId) {
