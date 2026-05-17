@@ -93,7 +93,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         if (linkedPlayer == null) {
             if (pendingCodes.containsKey(text)) {
                 String nick = pendingCodes.get(text);
-                
                 SqliteDataStore.bindAccount(nick, chatId);
                 pendingCodes.remove(text);
                 
@@ -102,7 +101,7 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                 Player p = Bukkit.getPlayer(nick);
                 if (p != null) p.sendMessage("§a[Telegram] Ваш аккаунт успешно привязан к боту!");
             } else {
-                sendMsg(chatId, "🔒 Доступ ограничен. Введите команду `/link` на сервере Minecraft и отправьте полученный числовой код сюда.");
+                sendMsg(chatId, "🔒 Доступ ограничен. Введите команду `/link` на сервере Minecraft и отправьте полученный код сюда.");
             }
             return;
         }
@@ -150,9 +149,14 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         }
     }
 
-    public void send2faRequest(long chatId, String nick, String ip, UUID uuid) {
-        if (!allowedAdmins.contains(chatId)) return;
+    public void send2FARequest(Player player) {
+        Long chatId = SqliteDataStore.getChatIdByNick(player.getName());
+        if (chatId != null) {
+            send2faRequest(chatId, player.getName(), player.getAddress().getAddress().getHostAddress(), player.getUniqueId());
+        }
+    }
 
+    public void send2faRequest(long chatId, String nick, String ip, UUID uuid) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText("⚠️ **Попытка входа в аккаунт!**\n\n" +
@@ -196,7 +200,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
         keyboardMarkup.setSelective(true);
         keyboardMarkup.setResizeKeyboard(true);
-        keyboardMarkup.setOneTimeKeyboard(false);
 
         List<KeyboardRow> keyboard = new ArrayList<>();
         KeyboardRow row1 = new KeyboardRow();
