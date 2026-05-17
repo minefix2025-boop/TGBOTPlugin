@@ -1,22 +1,38 @@
-package com.minefix.tgbotplugin;
+package minefix.tgbotplugin;
 
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-public class LinkCommand implements CommandExecutor {
-    private final DataStore store;
-    private final TelegramBotImpl bot;
+import java.util.Random;
 
-    public LinkCommand(DataStore store, TelegramBotImpl bot) { this.store = store; this.bot = bot; }
+public class LinkCommand implements CommandExecutor {
 
     @Override
-    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!(sender instanceof Player)) { sender.sendMessage("Только игроки."); return true; }
-        Player p = (Player) sender;
-        String code = store.createLinkCode(p.getUniqueId(), 300);
-        p.sendMessage("Код для привязки: " + code + " \nОтправьте этот код боту в Telegram чтобы привязать аккаунт.");
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("Команда только для игроков!");
+            return true;
+        }
+
+        Player player = sender.getPlayer();
+        
+        // Генерация случайного 6-значного кода
+        String code = String.valueOf(100000 + new Random().nextInt(900000));
+        
+        // Сохраняем код в DataStore для последующей проверки в боте
+        DataStore.saveTempLinkCode(player.getUniqueId(), code);
+
+        player.sendMessage("§aВаш код для привязки Telegram сгенерирован!");
+        
+        // Создание кликабельного компонента текста
+        TextComponent message = new TextComponent("§eНажмите СЮДА, чтобы скопировать код: §b§l" + code);
+        message.setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, code));
+        
+        player.spigot().sendMessage(message);
         return true;
     }
 }
