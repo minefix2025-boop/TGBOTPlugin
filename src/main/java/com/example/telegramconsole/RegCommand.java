@@ -27,10 +27,9 @@ public class RegCommand implements CommandExecutor {
             return true;
         }
 
-        // Регистрируем игрока в твоей базе данных
+        // Передаем args[0]
         if (plugin.getDatabaseManager().registerPlayer(p.getName(), args[0])) {
             p.sendMessage("§aВы успешно зарегистрировались! Защитите профиль: /link");
-            // Снимаем блокировку передвижения и удаляем из таймера напоминаний
             plugin.getMovementBlockListener().stopTimer(p.getUniqueId());
         } else {
             p.sendMessage("§cПроизошла ошибка при регистрации. Попробуйте позже.");
