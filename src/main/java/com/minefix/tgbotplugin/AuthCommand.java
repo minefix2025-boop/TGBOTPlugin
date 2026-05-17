@@ -1,10 +1,13 @@
-package minefix.tgbotplugin;
+package com.minefix.tgbotplugin;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import java.util.UUID;
+
+// ИСПРАВЛЕНО: Добавлен импорт хранилища сессий из параллельного пакета console
+import com.example.telegramconsole.PendingApproval;
 
 public class AuthCommand implements CommandExecutor {
 
@@ -33,7 +36,6 @@ public class AuthCommand implements CommandExecutor {
 
             DataStore.registerPlayer(uuid, password);
             player.sendMessage("§aВы успешно зарегистрировались!");
-            // После регистрации ТГ еще не привязан — сразу пускаем
             PluginMain.getMovementBlockListener().stopTimer(uuid);
 
         } else if (label.equalsIgnoreCase("login")) {
@@ -49,12 +51,12 @@ public class AuthCommand implements CommandExecutor {
 
             String tgChatId = DataStore.getTelegramChatId(uuid);
             if (tgChatId != null) {
-                // Если привязан Telegram, включаем 2FA режим
                 player.sendMessage("§eПароль верен! Подтвердите вход в вашем Telegram-боте...");
+                
+                // ИСПРАВЛЕНО: Теперь класс PendingApproval доступен благодаря импорту сверху
                 PendingApproval.add(uuid);
                 PluginMain.getTelegramBot().send2FARequest(player);
             } else {
-                // Если ТГ нет — авторизуем полностью
                 player.sendMessage("§aВы успешно авторизовались!");
                 PluginMain.getMovementBlockListener().stopTimer(uuid);
             }
