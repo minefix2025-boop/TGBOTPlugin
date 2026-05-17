@@ -1,4 +1,4 @@
-package example.telegramconsole;
+package com.example.telegramconsole;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -40,7 +40,6 @@ public class BotManager {
     private static class ConsoleBotInstance extends TelegramLongPollingBot {
 
         private final JavaPlugin plugin;
-        // Твой токен и список администраторов
         private final String token = "8629251193:AAErpWdzt_vNpkfhlxN8aiXlLgWkfM7h5QQ";
         private final Set<String> allowedAdmins = new HashSet<>(Arrays.asList("6343309173", "7742036100"));
 
@@ -64,22 +63,17 @@ public class BotManager {
                 String text = update.getMessage().getText();
                 String chatId = update.getMessage().getChatId().toString();
 
-                // Проверка прав: только указанные админы могут писать команды
                 if (!allowedAdmins.contains(chatId)) {
                     sendReply(chatId, "❌ Отказано в доступе к консоли сервера.");
                     return;
                 }
 
-                // Выполнение консольной команды в основном потоке Minecraft
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
-                        // Убираем слэш в начале, если админ его случайно написал
                         String commandToExecute = text.startsWith("/") ? text.substring(1) : text;
                         
-                        // Логируем выполнение команды в базу данных модуля консоли
                         TelegramConsolePlugin.getInstance().getDatabaseManager().logCommand(chatId, commandToExecute);
 
-                        // Отправляем команду в серверную консоль
                         boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandToExecute);
                         
                         if (success) {
