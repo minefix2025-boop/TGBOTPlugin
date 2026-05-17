@@ -19,9 +19,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
     private final String botToken = "8629251193:AAErpWdzt_vNpkfhlxN8aiXlLgWkfM7h5QQ";
     private final Set<String> adminIds = new HashSet<>(Arrays.asList("6343309173", "7742036100"));
 
-    // Карта для отслеживания ожидающих 2FA сессий (UUID игрока -> ID чата админа/пользователя)
-    private static final Map<UUID, Long> pending2FA = new HashMap<>();
-
     public TelegramBotImpl(JavaPlugin plugin) {
         this.plugin = plugin;
     }
@@ -38,31 +35,37 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
+        // 1. ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             String chatId = update.getMessage().getChatId().toString();
 
-            // 1. Команда привязки аккаунта в ТГ для обычных игроков
+            // Команда привязки аккаунта в ТГ для обычных игроков (/link код)
             if (messageText.startsWith("/link ")) {
-                String code = messageText.split(" ")[1];
-                UUID playerUUID = DataStore.getPlayerByLinkCode(code);
+                String[] parts = messageText.split(" ");
+                if (parts.length > 1) {
+                    String code = parts[1];
+                    UUID playerUUID = DataStore.getPlayerByLinkCode(code);
 
-                if (playerUUID != null) {
-                    DataStore.bindTelegram(playerUUID, chatId);
-                    sendMsg(chatId, "✅ Ваш Telegram успешно привязан к аккаунту Minecraft!");
-                    
-                    // Показываем кнопку профиля сразу после привязки
-                    sendProfileMenu(chatId, playerUUID);
+                    if (playerUUID != null) {
+                        DataStore.bindTelegram(playerUUID, chatId);
+                        sendMsg(chatId, "✅ Ваш Telegram успешно привязан к аккаунту Minecraft!");
+                        // Показываем кнопку профиля сразу после привязки
+                        sendProfileMenu(chatId, playerUUID);
+                    } else {
+                        sendMsg(chatId, "❌ Неверный или истекший код привязки.");
+                    }
                 } else {
-                    sendMsg(chatId, "❌ Неверный или истекший код привязки.");
+                    sendMsg(chatId, "❌ Используйте: /link <код>");
                 }
                 return;
             }
 
-            // 2. Панель управления (доступно только админам из списка)
-            if (adminIds.contains(chatId)) {
-                if (messageText.startsWith("/profile ")) {
-                    String targetName = messageText.split(" ")[1];
+            // Проверка команд администрирования (/profile имя)
+            if (adminIds.contains(chatId) && messageText.startsWith("/profile ")) {
+                String[] parts = messageText.split(" ");
+                if (parts.length > 1) {
+                    String targetName = parts[1];
                     Player targetPlayer = Bukkit.getPlayer(targetName);
                     
                     if (targetPlayer != null) {
@@ -70,46 +73,72 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                     } else {
                         sendMsg(chatId, "❌ Игрок " + targetName + " сейчас оффлайн. Не удалось загрузить точный профиль.");
                     }
+                } else {
+                    sendMsg(chatId, "❌ Используйте: /profile <Никнейм>");
                 }
+                return;
+            }
+
+            // ИНТЕГРАЦИЯ УДАРЕННОЙ КОНСОЛИ:
+            // Если пишет админ и это НЕ команды /profile или /link — выполняем текст как команду в консоли сервера
+            if (adminIds.contains(chatId) && !messageText.startsWith("/profile") && !messageText.startsWith("/link")) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    String cleanCommand = messageText.startsWith("/") ? messageText.substring(1) : messageText;
+                    
+                    // Логируем (если подключен модуль логирования из соседнего пакета)
+                    try {
+                        example.telegramconsole.TelegramConsolePlugin.getInstance().getDatabaseManager().logCommand(chatId, cleanCommand);
+                    } catch (NoClassDefFoundError | Exception ignored) {}
+
+                    boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cleanCommand);
+                    
+                    if (success) {
+                        sendMsg(chatId, "💻 Консоль: Команда `/" + cleanCommand + "` выполнена.");
+                    } else {
+                        sendMsg(chatId, "⚠️ Консоль не смогла обработать команду: `/" + cleanCommand + "`");
+                    }
+                });
+                return; 
             }
         } 
         
-        // 3. Обработка нажатий на Inline-кнопки (2FA и Админ-панель)
+        // 2. ОБРАБОТКА НАЖАТИЙ НА INLINE-КНОПКИ (2FA и Админ-панель управления)
         else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
             String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
             long messageId = update.getCallbackQuery().getMessage().getMessageId();
 
-            // Логика 2FA
+            // Логика обработки двухфакторной аутентификации (2FA)
             if (callbackData.startsWith("2fa_accept_") || callbackData.startsWith("2fa_deny_")) {
-                UUID playerUuid = UUID.fromString(callbackData.split("_")[2]);
+                String[] parts = callbackData.split("_");
+                UUID playerUuid = UUID.fromString(parts[2]);
                 Player player = Bukkit.getPlayer(playerUuid);
 
                 if (callbackData.startsWith("2fa_accept_")) {
-                    // Разрешаем вход, убираем блокировки
                     plugin.getServer().getScheduler().runTask(plugin, () -> {
                         if (player != null) {
                             player.sendMessage("§aВход успешно подтвержден через Telegram!");
-                            // Вызов метода удаления игрока из списка проверяемых в MovementBlockListener
                             PluginMain.getMovementBlockListener().stopTimer(playerUuid);
+                            PendingApproval.remove(playerUuid);
                         }
                     });
                     editMsg(chatId, (int) messageId, "✅ Вход в аккаунт был одобрен.");
                 } else {
-                    // Кикаем игрока
                     plugin.getServer().getScheduler().runTask(plugin, () -> {
                         if (player != null) {
                             player.kickPlayer("§cНЕ подтвержден через Telegram");
+                            PendingApproval.remove(playerUuid);
                         }
                     });
                     editMsg(chatId, (int) messageId, "❌ Вход в аккаунт был отклонен. Игрок кикнут.");
                 }
             }
             
-            // Логика Админ-панели (Управление игроком)
+            // Логика управления игроками через кнопки в админ-панели (Kick/Lock/Unlock)
             else if (adminIds.contains(chatId) && callbackData.contains("_")) {
-                String action = callbackData.split("_")[0];
-                UUID targetUuid = UUID.fromString(callbackData.split("_")[1]);
+                String[] parts = callbackData.split("_");
+                String action = parts[0];
+                UUID targetUuid = UUID.fromString(parts[1]);
                 Player targetPlayer = Bukkit.getPlayer(targetUuid);
 
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -124,7 +153,9 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
                             break;
                         case "lock":
                             DataStore.setPlayerBlocked(targetUuid, true);
-                            if (targetPlayer != null) targetPlayer.kickPlayer("§cВаш аккаунт заблокирован через Telegram.");
+                            if (targetPlayer != null) {
+                                targetPlayer.kickPlayer("§cВаш аккаунт заблокирован через Telegram.");
+                            }
                             editMsg(chatId, (int) messageId, "🔒 Действие выполнено: Аккаунт заблокирован.");
                             break;
                         case "unlock":
@@ -137,10 +168,10 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         }
     }
 
-    // Отправка запроса 2FA на привязанный Telegram при авторизации
+    // Отправка карточки запроса 2FA при попытке авторизации
     public void send2FARequest(Player player) {
         String chatId = DataStore.getTelegramChatId(player.getUniqueId());
-        if (chatId == null) return; // Если ТГ не привязан, пропускаем 2FA
+        if (chatId == null) return; 
 
         String ip = player.getAddress().getAddress().getHostAddress();
         UUID uuid = player.getUniqueId();
@@ -174,7 +205,7 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         }
     }
 
-    // Отправка меню профиля игрока с кнопками управления
+    // Метод генерации интерактивного меню профиля
     private void sendProfileMenu(String chatId, UUID targetUuid) {
         Player target = Bukkit.getPlayer(targetUuid);
         boolean isOnline = (target != null && target.isOnline());
@@ -188,7 +219,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         InlineKeyboardMarkup markupInline = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
 
-        // Строка кнопок 1: Заблокировать / Разблокировать
         List<InlineKeyboardButton> row1 = new ArrayList<>();
         InlineKeyboardButton lockBtn = new InlineKeyboardButton();
         lockBtn.setText("🔒 Заблокировать");
@@ -201,7 +231,6 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         row1.add(lockBtn);
         row1.add(unlockBtn);
 
-        // Строка кнопок 2: Кикнуть
         List<InlineKeyboardButton> row2 = new ArrayList<>();
         InlineKeyboardButton kickBtn = new InlineKeyboardButton();
         kickBtn.setText("🥾 Кикнуть");
@@ -220,7 +249,7 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMsg(String chatId, String text) {
+    public void sendMsg(String chatId, String text) {
         SendMessage msg = new SendMessage();
         msg.setChatId(chatId);
         msg.setText(text);
