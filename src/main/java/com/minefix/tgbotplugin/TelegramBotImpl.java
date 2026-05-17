@@ -1,4 +1,4 @@
-package minefix.tgbotplugin;
+package com.minefix.tgbotplugin;
 
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -152,7 +152,7 @@ public class TelegramBotImpl extends TelegramLongPollingBot {
         }
     }
 
-    // Отправка запроса авторизации 2FA админам при входе на сервер
+    // Отправка запроса авторизации 2FA админам при входе на server
     public void send2faRequest(long chatId, String nick, String ip, UUID uuid) {
         if (!allowedAdmins.contains(chatId)) return;
 
