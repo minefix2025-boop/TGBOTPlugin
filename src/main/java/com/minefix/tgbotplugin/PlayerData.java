@@ -1,28 +1,35 @@
-package com.minefix.tgbotplugin;
+package minefix.tgbotplugin;
 
 import java.util.UUID;
 
 public class PlayerData {
-    private UUID uuid;
-    private String name;
-    private String passwordHash; // bcrypt
-    private Long telegramChatId; // nullable
-    private boolean locked;
+    private final UUID uuid;
+    private boolean isAuthenticated;
+    private String telegramChatId;
 
-    public PlayerData(UUID uuid, String name, String passwordHash, Long telegramChatId, boolean locked) {
+    public PlayerData(UUID uuid) {
         this.uuid = uuid;
-        this.name = name;
-        this.passwordHash = passwordHash;
-        this.telegramChatId = telegramChatId;
-        this.locked = locked;
+        this.isAuthenticated = false;
+        this.telegramChatId = null;
     }
 
-    public UUID getUuid() { return uuid; }
-    public String getName() { return name; }
-    public String getPasswordHash() { return passwordHash; }
-    public Long getTelegramChatId() { return telegramChatId; }
-    public boolean isLocked() { return locked; }
+    public UUID getUuid() {
+        return uuid;
+    }
 
-    public void setTelegramChatId(Long telegramChatId) { this.telegramChatId = telegramChatId; }
-    public void setLocked(boolean locked) { this.locked = locked; }
+    public boolean isAuthenticated() {
+        return isAuthenticated;
+    }
+
+    public void setAuthenticated(boolean authenticated) {
+        this.isAuthenticated = authenticated;
+    }
+
+    public String getTelegramChatId() {
+        return telegramChatId;
+    }
+
+    public void setTelegramChatId(String telegramChatId) {
+        this.telegramChatId = telegramChatId;
+    }
 }
