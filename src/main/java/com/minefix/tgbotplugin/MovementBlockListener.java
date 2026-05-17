@@ -1,6 +1,5 @@
-package minefix.tgbotplugin;
+package com.example.telegramconsole;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -8,7 +7,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -18,35 +16,31 @@ import java.util.UUID;
 
 public class MovementBlockListener implements Listener {
 
-    private final JavaPlugin plugin;
+    private final TelegramConsolePlugin plugin;
     private final Map<UUID, BukkitTask> activeTimers = new HashMap<>();
 
-    public MovementBlockListener(JavaPlugin plugin) {
+    public MovementBlockListener(TelegramConsolePlugin plugin) {
         this.plugin = plugin;
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        UUID uuid = player.getUniqueId();
-
-        // Проверяем, зарегистрирован ли игрок в базе данных (пример логики)
-        boolean isRegistered = DataStore.isRegistered(uuid); 
-
+        boolean isRegistered = plugin.getDatabaseManager().playerExists(player.getName());
         startAuthTimer(player, isRegistered);
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         stopTimer(event.getPlayer().getUniqueId());
+        PendingApproval.remove(event.getPlayer().getUniqueId());
     }
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        UUID uuid = player.getUniqueId();
+        UUID uuid = event.getPlayer().getUniqueId();
 
-        // Если игрок еще не авторизован/зарегистрирован — полностью отменяем движение и повороты головы
+        // Если игрок в списке таймера (не авторизован) — отменяем ходьбу и вращение головой
         if (activeTimers.containsKey(uuid)) {
             Location from = event.getFrom();
             Location to = event.getTo();
@@ -79,10 +73,15 @@ public class MovementBlockListener implements Listener {
                     return;
                 }
 
-                if (isRegistered) {
-                    player.sendMessage("§cАвторизуйтесь! Осталось на авторизацию " + timeLeft + " сек. Авторизация: §e/login <Пароль>");
+                // Логика проверки: если игрок уже ввел верный пароль и ждет клика кнопок 2FA в ТГ
+                if (PendingApproval.isAwaiting(uuid)) {
+                    player.sendMessage("§6[2FA] Подтвердите вход в вашем Telegram-боте! Осталось: " + timeLeft + " сек.");
                 } else {
-                    player.sendMessage("§cЗарегистрируйтесь! Осталось на регистрацию " + timeLeft + " сек. Регистрация: §e/reg <Пароль>");
+                    if (isRegistered) {
+                        player.sendMessage("§cАвторизуйтесь! Осталось на регистратцию " + timeLeft + " сек регистрация: /login <Пароль>");
+                    } else {
+                        player.sendMessage("§cЗарегистрируйтесь! Осталось на регистратцию " + timeLeft + " сек регистрация: /reg <Пароль>");
+                    }
                 }
 
                 timeLeft -= 3;
