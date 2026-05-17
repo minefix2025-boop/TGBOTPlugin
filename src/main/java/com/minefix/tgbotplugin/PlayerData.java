@@ -8,12 +8,6 @@ public class PlayerData {
         this.nickname = nickname;
         this.lastIp = lastIp;
     }
-
-    public String getNickname() {
-        return nickname;
-    }
-
-    public String getLastIp() {
-        return lastIp;
-    }
+    public String getNickname() { return nickname; }
+    public String getLastIp() { return lastIp; }
 }
