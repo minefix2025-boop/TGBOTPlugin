@@ -7,6 +7,7 @@ public class TelegramConsolePlugin extends JavaPlugin {
     private static TelegramConsolePlugin instance;
     private BotManager botManager;
     private DatabaseManager databaseManager;
+    private MovementBlockListener movementBlockListener;
 
     @Override
     public void onEnable() {
@@ -14,14 +15,19 @@ public class TelegramConsolePlugin extends JavaPlugin {
 
         this.databaseManager = new DatabaseManager(this);
         
+        this.movementBlockListener = new MovementBlockListener(this);
+        getServer().getPluginManager().registerEvents(movementBlockListener, this);
+
         this.botManager = new BotManager(this);
         this.botManager.startBot();
 
-        if (this.getCommand("tgconsole") != null) {
-            this.getCommand("tgconsole").setExecutor(new TGConsoleCommand());
-        }
+        // Передаем инстанс плагина 'this' в конструкторы команд
+        if (this.getCommand("login") != null) this.getCommand("login").setExecutor(new LoginCommand(this));
+        if (this.getCommand("reg") != null) this.getCommand("reg").setExecutor(new RegCommand(this));
+        if (this.getCommand("link") != null) this.getCommand("link").setExecutor(new LinkCommand(this));
+        if (this.getCommand("tgconsole") != null) this.getCommand("tgconsole").setExecutor(new TGConsoleCommand());
 
-        getLogger().info("TelegramConsole модуль успешно активирован!");
+        getLogger().info("TelegramConsole модуль и системы защиты успешно активированы!");
     }
 
     @Override
@@ -38,5 +44,13 @@ public class TelegramConsolePlugin extends JavaPlugin {
 
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
+    }
+
+    public BotManager getBotManager() {
+        return botManager;
+    }
+
+    public MovementBlockListener getMovementBlockListener() {
+        return movementBlockListener;
     }
 }
