@@ -1,4 +1,4 @@
-package example.telegramconsole;
+package com.example.telegramconsole;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
