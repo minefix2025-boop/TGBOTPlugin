@@ -8,7 +8,11 @@
 
   <name>TGBOTPlugin</name>
 
-    <dependencies>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
     <!-- Spigot API (provided by server) -->
     <dependency>
       <groupId>org.spigotmc</groupId>
@@ -46,17 +50,57 @@
     </dependency>
   </dependencies>
 
-
   <build>
     <plugins>
+      <!-- Компилятор Java -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.8.1</version>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
+          <source>16</source>
+          <target>16</target>
         </configuration>
+      </plugin>
+
+      <!-- Плагин для упаковки зависимостей внутрь JAR -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <!-- Релокация тяжелых библиотек во избежание конфликтов с другими плагинами -->
+              <relocations>
+                <relocation>
+                  <pattern>org.telegram</pattern>
+                  <shadedPattern>com.minefix.tgbotplugin.libs.telegram</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.mindrot.jbcrypt</pattern>
+                  <shadedPattern>com.minefix.tgbotplugin.libs.jbcrypt</shadedPattern>
+                </relocation>
+              </relocations>
+              <!-- Фильтр для удаления лишних подписей из зависимостей, чтобы не было ошибок безопасности -->
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
