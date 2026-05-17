@@ -1,10 +1,13 @@
 package com.minefix.tgbotplugin;
 
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import java.util.UUID;
+
+import com.example.telegramconsole.PendingApproval;
 
 public class AuthCommand implements CommandExecutor {
 
@@ -33,6 +36,7 @@ public class AuthCommand implements CommandExecutor {
 
             DataStore.registerPlayer(uuid, password);
             player.sendMessage("§aВы успешно зарегистрировались!");
+            
             PluginMain.getMovementBlockListener().stopTimer(uuid);
 
         } else if (label.equalsIgnoreCase("login")) {
@@ -50,9 +54,8 @@ public class AuthCommand implements CommandExecutor {
             if (tgChatId != null) {
                 player.sendMessage("§eПароль верен! Подтвердите вход в вашем Telegram-боте...");
                 
-                // Используем локальный класс заморозки для 2FA
-                com.minefix.tgbotplugin.PendingApproval.add(uuid);
-                PluginMain.getInstance().getBot().send2FARequest(player);
+                PendingApproval.add(uuid);
+                PluginMain.getTelegramBot().send2FARequest(player);
             } else {
                 player.sendMessage("§aВы успешно авторизовались!");
                 PluginMain.getMovementBlockListener().stopTimer(uuid);
