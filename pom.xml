@@ -8,18 +8,20 @@
 
   <name>TGBOTPlugin</name>
 
-  <dependencies>
+    <dependencies>
     <!-- Spigot API (provided by server) -->
     <dependency>
       <groupId>org.spigotmc</groupId>
       <artifactId>spigot-api</artifactId>
       <version>1.16.5-R0.1-SNAPSHOT</version>
       <scope>provided</scope>
-      <dependency>
-  <groupId>com.google.code.gson</groupId>
-  <artifactId>gson</artifactId>
-  <version>2.10.1</version>
-</dependency>
+    </dependency>
+
+    <!-- Google Gson -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.10.1</version>
     </dependency>
 
     <!-- Telegram Bots -->
@@ -43,6 +45,7 @@
       <version>0.4</version>
     </dependency>
   </dependencies>
+
 
   <build>
     <plugins>
