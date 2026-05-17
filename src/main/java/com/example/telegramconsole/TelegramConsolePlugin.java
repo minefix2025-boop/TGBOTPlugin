@@ -1,53 +1,44 @@
-package com.example.telegramconsole;
+package example.telegramconsole;
 
-import org.bukkit.Bukkit;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class TelegramConsolePlugin extends JavaPlugin {
 
+    private static TelegramConsolePlugin instance;
     private BotManager botManager;
     private DatabaseManager databaseManager;
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-        FileConfiguration config = getConfig();
+        instance = this;
 
-        String botToken = config.getString("bot-token", "8629251193:AAErpWdzt_vNpkfhlxN8aiXlLgWkfM7h5QQ");
-        long adminId = config.getLong("admin-id", 7742036100L);
+        // Создаем менеджер базы данных для логирования команд консоли
+        this.databaseManager = new DatabaseManager(this);
+        
+        // Создаем и запускаем бота консоли
+        this.botManager = new BotManager(this);
+        this.botManager.startBot();
 
-        // Инициализация базы JSON в папке плагина ATGCON
-        databaseManager = new DatabaseManager(getDataFolder());
-
-        botManager = new BotManager(botToken, adminId, this);
-        if (botManager.start()) {
-            getLogger().info("✅ Telegram бот успешно запущен!");
-        } else {
-            getLogger().severe("❌ Ошибка при запуске Telegram бота! Проверьте токен.");
-            Bukkit.getPluginManager().disablePlugin(this);
-            return;
+        if (this.getCommand("tgconsole") != null) {
+            this.getCommand("tgconsole").setExecutor(new TGConsoleCommand());
         }
 
-        getCommand("reg").setExecutor(new RegCommand(this));
-        getCommand("login").setExecutor(new LoginCommand(this));
-        getCommand("link").setExecutor(new LinkCommand(this));
-        getCommand("tgconsole").setExecutor(new TGConsoleCommand(this));
-
-        Bukkit.getPluginManager().registerEvents(new PlayerListener(this), this);
-
-        getLogger().info("═══════════════════════════════════════");
-        getLogger().info("✅ TelegramConsoleBot успешно загружен!");
-        getLogger().info("═══════════════════════════════════════");
+        getLogger().info("Модуль TelegramConsole успешно запущен!");
     }
 
     @Override
     public void onDisable() {
         if (botManager != null) {
-            botManager.stop();
+            botManager.stopBot();
         }
+        getLogger().info("Модуль TelegramConsole отключен.");
     }
 
-    public BotManager getBotManager() { return botManager; }
-    public DatabaseManager getDatabaseManager() { return databaseManager; }
+    public static TelegramConsolePlugin getInstance() {
+        return instance;
+    }
+
+    public DatabaseManager getDatabaseManager() {
+        return databaseManager;
+    }
 }
