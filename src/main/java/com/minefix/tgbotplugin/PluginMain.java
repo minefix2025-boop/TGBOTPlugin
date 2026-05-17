@@ -11,6 +11,7 @@ public class PluginMain extends JavaPlugin {
 
     private static MovementBlockListener movementBlockListener;
     private static TelegramBotImpl telegramBot;
+    private SqliteDataStore sqliteDataStore;
 
     @Override
     public void onEnable() {
@@ -18,7 +19,9 @@ public class PluginMain extends JavaPlugin {
             getDataFolder().mkdirs();
         }
 
-        // ИСПРАВЛЕНО: Передаем экземпляр плагина TelegramConsolePlugin, который ожидает конструктор
+        this.sqliteDataStore = new SqliteDataStore(this);
+        DataStore.init(this.sqliteDataStore);
+
         movementBlockListener = new MovementBlockListener(TelegramConsolePlugin.getInstance());
         getServer().getPluginManager().registerEvents(movementBlockListener, this);
         getServer().getPluginManager().registerEvents(new JoinListener(), this);
