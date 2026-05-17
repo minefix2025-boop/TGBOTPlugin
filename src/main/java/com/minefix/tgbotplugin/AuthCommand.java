@@ -6,9 +6,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import java.util.UUID;
 
-// ИСПРАВЛЕНО: Добавлен импорт хранилища сессий из параллельного пакета console
-import com.example.telegramconsole.PendingApproval;
-
 public class AuthCommand implements CommandExecutor {
 
     @Override
@@ -36,6 +33,7 @@ public class AuthCommand implements CommandExecutor {
 
             DataStore.registerPlayer(uuid, password);
             player.sendMessage("§aВы успешно зарегистрировались!");
+            // Отключаем таймер кика, который запустился при входе
             PluginMain.getMovementBlockListener().stopTimer(uuid);
 
         } else if (label.equalsIgnoreCase("login")) {
@@ -53,9 +51,11 @@ public class AuthCommand implements CommandExecutor {
             if (tgChatId != null) {
                 player.sendMessage("§eПароль верен! Подтвердите вход в вашем Telegram-боте...");
                 
-                // ИСПРАВЛЕНО: Теперь класс PendingApproval доступен благодаря импорту сверху
+                // Добавляем в локальный список заморозки (2FA) внутри нашего пакета
                 PendingApproval.add(uuid);
-                PluginMain.getTelegramBot().send2FARequest(player);
+                
+                // Отправляем пуш-уведомление с кнопками в Telegram-бот
+                PluginMain.getInstance().getBot().send2FARequest(player);
             } else {
                 player.sendMessage("§aВы успешно авторизовались!");
                 PluginMain.getMovementBlockListener().stopTimer(uuid);
