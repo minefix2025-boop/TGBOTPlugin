@@ -1,25 +1,21 @@
-package com.minefix.tgbotplugin;
+package minefix.tgbotplugin;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 public class PendingApproval {
-    private String id;
-    private UUID playerUuid;
-    private Long chatId; // admin who can approve/was targeted (we will send to all admins but store origin chat id null)
-    private String ip;
-    private long expiresAt; // epoch millis
+    private static final Set<UUID> awaiting2FA = new HashSet<>();
 
-    public PendingApproval(String id, UUID playerUuid, Long chatId, String ip, long expiresAt) {
-        this.id = id;
-        this.playerUuid = playerUuid;
-        this.chatId = chatId;
-        this.ip = ip;
-        this.expiresAt = expiresAt;
+    public static void add(UUID uuid) {
+        awaiting2FA.add(uuid);
     }
 
-    public String getId() { return id; }
-    public UUID getPlayerUuid() { return playerUuid; }
-    public Long getChatId() { return chatId; }
-    public String getIp() { return ip; }
-    public long getExpiresAt() { return expiresAt; }
+    public static void remove(UUID uuid) {
+        awaiting2FA.remove(uuid);
+    }
+
+    public static boolean isAwaiting(UUID uuid) {
+        return awaiting2FA.contains(uuid);
+    }
 }
