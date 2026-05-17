@@ -41,11 +41,8 @@ public class BotManager {
         if (botInstance != null) botInstance.sendReply(String.valueOf(chatId), text);
     }
 
-    public void showAccountMenu(long chatId, String playerName) {
-        // Твой старый метод вызова меню аккаунта (оставляем без изменений)
-    }
+    public void showAccountMenu(long chatId, String playerName) {}
 
-    // Новый метод отправки запроса двухфакторного подтверждения 2FA
     public void send2FARequest(Player player, long chatId) {
         if (botInstance != null) botInstance.send2FACard(player, chatId);
     }
@@ -67,7 +64,6 @@ public class BotManager {
 
         @Override
         public void onUpdateReceived(Update update) {
-            // Обработка текстовых сообщений (Консоль)
             if (update.hasMessage() && update.getMessage().hasText()) {
                 String text = update.getMessage().getText();
                 String chatId = update.getMessage().getChatId().toString();
@@ -77,10 +73,9 @@ public class BotManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     String cmd = text.startsWith("/") ? text.substring(1) : text;
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-                    sendReply(chatId, "💻 Консоль: Команда executed.");
+                    sendReply(chatId, "💻 Консоль выполнила команду.");
                 });
             } 
-            // Обработка кликов по кнопкам "Принять" / "Отказать"
             else if (update.hasCallbackQuery()) {
                 String callbackData = update.getCallbackQuery().getData();
                 String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
@@ -116,7 +111,7 @@ public class BotManager {
         public void send2FACard(Player player, long chatId) {
             String ip = player.getAddress().getAddress().getHostAddress();
             UUID uuid = player.getUniqueId();
-            PendingApproval.add(uuid); // Переводим игрока в статус ожидания клика 2FA
+            PendingApproval.add(uuid);
 
             SendMessage sm = new SendMessage();
             sm.setChatId(String.valueOf(chatId));
