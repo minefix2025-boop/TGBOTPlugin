@@ -1,92 +1,118 @@
-package com.minefix.tgbotplugin;
+package com.example.telegramconsole;
 
-import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.async.AsyncPlayerChatEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class MovementBlockListener implements Listener {
 
-    private final HashMap<UUID, Integer> authTimers = new HashMap<>();
+    private final TelegramConsolePlugin plugin;
+    private final Map<UUID, BukkitTask> activeTimers = new HashMap<>();
 
-    public void startTimer(Player player) {
+    public MovementBlockListener(TelegramConsolePlugin plugin) {
+        this.plugin = plugin;
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        boolean isRegistered = plugin.getDatabaseManager().playerExists(player.getName());
+        startAuthTimer(player, isRegistered);
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        stopTimer(event.getPlayer().getUniqueId());
+        PendingApproval.remove(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+
+        // Полная блокировка ходьбы и вращения головой/мышкой до авторизации
+        if (activeTimers.containsKey(uuid)) {
+            Location from = event.getFrom();
+            Location to = event.getTo();
+            
+            if (to != null && (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ() 
+                    || from.getYaw() != to.getYaw() || from.getPitch() != to.getPitch())) {
+                event.setTo(from); 
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
-        stopTimer(uuid);
 
-        int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(PluginMain.getInstance(), new Runnable() {
-            int secondsLeft = 60;
+        // Полная блокировка чата ("не может говорить") до подтверждения в ТГ или ввода пароля
+        if (activeTimers.containsKey(uuid)) {
+            event.setCancelled(true); // Отменяем отправку сообщения в глобальный чат
+            
+            if (PendingApproval.isAwaiting(uuid)) {
+                player.sendMessage("§c[2FA] Вы не можете говорить! Потвердите через Телеграм бота.");
+            } else {
+                player.sendMessage("§c[Защита] Вы не можете говорить, пока не авторизуетесь! Используйте /login или /reg");
+            }
+        }
+    }
+
+    private void startAuthTimer(Player player, boolean isRegistered) {
+        UUID uuid = player.getUniqueId();
+        
+        BukkitTask task = new BukkitRunnable() {
+            int timeLeft = 20;
 
             @Override
             public void run() {
                 if (!player.isOnline()) {
-                    stopTimer(uuid);
+                    cancel();
+                    activeTimers.remove(uuid);
                     return;
                 }
 
-                if (DataStore.isRegistered(uuid) && !com.minefix.tgbotplugin.PendingApproval.contains(uuid)) {
-                    stopTimer(uuid);
-                    return;
-                }
-
-                if (secondsLeft <= 0) {
+                if (timeLeft <= 0) {
+                    cancel();
+                    activeTimers.remove(uuid);
                     player.kickPlayer("§cВремя на авторизацию истекло!");
-                    stopTimer(uuid);
-                } else {
-                    if (secondsLeft % 20 == 0 || secondsLeft <= 10) {
-                        if (!DataStore.isRegistered(uuid)) {
-                            player.sendMessage("§cПожалуйста, авторизуйтесь: /reg <пароль> или /login <пароль> (" + secondsLeft + " сек)");
-                        } else if (com.minefix.tgbotplugin.PendingApproval.contains(uuid)) {
-                            player.sendMessage("§eОжидание подтверждения входа через Telegram... (" + secondsLeft + " сек)");
-                        }
-                    }
-                    secondsLeft--;
+                    return;
                 }
-            }
-        }, 0L, 20L);
 
-        authTimers.put(uuid, taskId);
+                // Таймер напоминаний каждые 3 секунды
+                if (PendingApproval.isAwaiting(uuid)) {
+                    player.sendMessage("§6[2FA] Потвердите через Телеграм бота! Осталось на регистратцию " + timeLeft + " сек");
+                } else {
+                    if (isRegistered) {
+                        player.sendMessage("§cАвторизуйтесь! Осталось на регистратцию " + timeLeft + " сек регистрация: /login <Пароль>");
+                    } else {
+                        player.sendMessage("§cЗарегистрируйтесь! Осталось на регистратцию " + timeLeft + " сек регистрация: /reg <Пароль>");
+                    }
+                }
+
+                timeLeft -= 3;
+            }
+        }.runTaskTimer(plugin, 0L, 60L); // 60 тиков = 3 секунды
+
+        activeTimers.put(uuid, task);
     }
 
     public void stopTimer(UUID uuid) {
-        if (authTimers.containsKey(uuid)) {
-            Bukkit.getScheduler().cancelTask(authTimers.get(uuid));
-            authTimers.remove(uuid);
-        }
-    }
-
-    @EventHandler
-    public void onMove(PlayerMoveEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        if (!DataStore.isRegistered(uuid) || com.minefix.tgbotplugin.PendingApproval.contains(uuid)) {
-            event.setTo(event.getFrom());
-        }
-    }
-
-    @EventHandler
-    public void onChat(AsyncPlayerChatEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        if (!DataStore.isRegistered(uuid) || com.minefix.tgbotplugin.PendingApproval.contains(uuid)) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage("§c❌ Вы не можете писать в чат до полной авторизации!");
-        }
-    }
-
-    @EventHandler
-    public void onCommand(PlayerCommandPreprocessEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        String message = event.getMessage().toLowerCase();
-
-        if (!DataStore.isRegistered(uuid) || com.minefix.tgbotplugin.PendingApproval.contains(uuid)) {
-            if (!message.startsWith("/login ") && !message.startsWith("/reg ")) {
-                event.setCancelled(true);
-                event.getPlayer().sendMessage("§c❌ Использование команд заблокировано до подтверждения входа!");
-            }
+        if (activeTimers.containsKey(uuid)) {
+            activeTimers.get(uuid).cancel();
+            activeTimers.remove(uuid);
         }
     }
 }
