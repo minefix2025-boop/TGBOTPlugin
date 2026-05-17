@@ -1,35 +1,19 @@
 package com.minefix.tgbotplugin;
 
-import java.util.UUID;
-
 public class PlayerData {
-    private final UUID uuid;
-    private boolean isAuthenticated;
-    private String telegramChatId;
+    private final String nickname;
+    private final String lastIp;
 
-    public PlayerData(UUID uuid) {
-        this.uuid = uuid;
-        this.isAuthenticated = false;
-        this.telegramChatId = null;
+    public PlayerData(String nickname, String lastIp) {
+        this.nickname = nickname;
+        this.lastIp = lastIp;
     }
 
-    public UUID getUuid() {
-        return uuid;
+    public String getNickname() {
+        return nickname;
     }
 
-    public boolean isAuthenticated() {
-        return isAuthenticated;
-    }
-
-    public void setAuthenticated(boolean authenticated) {
-        this.isAuthenticated = authenticated;
-    }
-
-    public String getTelegramChatId() {
-        return telegramChatId;
-    }
-
-    public void setTelegramChatId(String telegramChatId) {
-        this.telegramChatId = telegramChatId;
+    public String getLastIp() {
+        return lastIp;
     }
 }
