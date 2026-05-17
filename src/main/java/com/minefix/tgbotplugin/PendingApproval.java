@@ -1,21 +1,25 @@
-package com.example.telegramconsole;
+package com.minefix.tgbotplugin;
 
 import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 public class PendingApproval {
-    private static final Set<UUID> awaiting2FA = new HashSet<>();
+
+    private static final HashSet<UUID> frozenPlayers = new HashSet<>();
 
     public static void add(UUID uuid) {
-        awaiting2FA.add(uuid);
+        frozenPlayers.add(uuid);
     }
 
     public static void remove(UUID uuid) {
-        awaiting2FA.remove(uuid);
+        frozenPlayers.remove(uuid);
     }
 
-    public static boolean isAwaiting(UUID uuid) {
-        return awaiting2FA.contains(uuid);
+    public static boolean contains(UUID uuid) {
+        return frozenPlayers.contains(uuid);
+    }
+
+    public static void clear() {
+        frozenPlayers.clear();
     }
 }
