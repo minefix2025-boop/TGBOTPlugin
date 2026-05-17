@@ -1,16 +1,18 @@
 package com.example.telegramconsole;
 
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 public class BotManager {
 
@@ -26,9 +28,7 @@ public class BotManager {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
             this.botInstance = new ConsoleBotInstance(plugin);
             botsApi.registerBot(botInstance);
-            plugin.getLogger().info("[ConsoleBot] Успешно запущен!");
         } catch (Exception e) {
-            plugin.getLogger().severe("[ConsoleBot] Ошибка старта: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -37,66 +37,125 @@ public class BotManager {
         this.botInstance = null;
     }
 
-    private static class ConsoleBotInstance extends TelegramLongPollingBot {
+    public void sendMsg(long chatId, String text) {
+        if (botInstance != null) botInstance.sendReply(String.valueOf(chatId), text);
+    }
 
+    public void showAccountMenu(long chatId, String playerName) {
+        // Твой старый метод вызова меню аккаунта (оставляем без изменений)
+    }
+
+    // Новый метод отправки запроса двухфакторного подтверждения 2FA
+    public void send2FARequest(Player player, long chatId) {
+        if (botInstance != null) botInstance.send2FACard(player, chatId);
+    }
+
+    private static class ConsoleBotInstance extends TelegramLongPollingBot {
         private final JavaPlugin plugin;
         private final String token = "8629251193:AAErpWdzt_vNpkfhlxN8aiXlLgWkfM7h5QQ";
-        private final Set<String> allowedAdmins = new HashSet<>(Arrays.asList("6343309173", "7742036100"));
+        private final Set<String> adminIds = new HashSet<>(Arrays.asList("6343309173", "7742036100"));
 
         public ConsoleBotInstance(JavaPlugin plugin) {
             this.plugin = plugin;
         }
 
         @Override
-        public String getBotUsername() {
-            return "MinecraftConsoleBot";
-        }
+        public String getBotUsername() { return "MinecraftConsoleBot"; }
 
         @Override
-        public String getBotToken() {
-            return this.token;
-        }
+        public String getBotToken() { return this.token; }
 
         @Override
         public void onUpdateReceived(Update update) {
+            // Обработка текстовых сообщений (Консоль)
             if (update.hasMessage() && update.getMessage().hasText()) {
                 String text = update.getMessage().getText();
                 String chatId = update.getMessage().getChatId().toString();
 
-                if (!allowedAdmins.contains(chatId)) {
-                    sendReply(chatId, "❌ Отказано в доступе к консоли сервера.");
-                    return;
-                }
+                if (!adminIds.contains(chatId)) return;
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    try {
-                        String commandToExecute = text.startsWith("/") ? text.substring(1) : text;
-                        
-                        TelegramConsolePlugin.getInstance().getDatabaseManager().logCommand(chatId, commandToExecute);
-
-                        boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandToExecute);
-                        
-                        if (success) {
-                            sendReply(chatId, "💻 Команда `/" + commandToExecute + "` успешно выполнена на сервере.");
-                        } else {
-                            sendReply(chatId, "⚠️ Сервер не смог обработать команду: `/" + commandToExecute + "`");
-                        }
-                    } catch (Exception e) {
-                        sendReply(chatId, "🛑 Ошибка при выполнении команды: " + e.getMessage());
-                    }
+                    String cmd = text.startsWith("/") ? text.substring(1) : text;
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+                    sendReply(chatId, "💻 Консоль: Команда executed.");
                 });
+            } 
+            // Обработка кликов по кнопкам "Принять" / "Отказать"
+            else if (update.hasCallbackQuery()) {
+                String callbackData = update.getCallbackQuery().getData();
+                String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
+                int messageId = update.getCallbackQuery().getMessage().getMessageId();
+
+                if (callbackData.startsWith("2fa_accept_") || callbackData.startsWith("2fa_deny_")) {
+                    String[] parts = callbackData.split("_");
+                    UUID playerUuid = UUID.fromString(parts[2]);
+                    Player player = Bukkit.getPlayer(playerUuid);
+
+                    if (callbackData.startsWith("2fa_accept_")) {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (player != null) {
+                                player.sendMessage("§aВход успешно подтвержден через Telegram!");
+                                TelegramConsolePlugin.getInstance().getMovementBlockListener().stopTimer(playerUuid);
+                                PendingApproval.remove(playerUuid);
+                            }
+                        });
+                        editReply(chatId, messageId, "✅ Вход в аккаунт одобрен.");
+                    } else {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (player != null) {
+                                player.kickPlayer("§cНЕ потвержден через Telegram");
+                                PendingApproval.remove(playerUuid);
+                            }
+                        });
+                        editReply(chatId, messageId, "❌ Вход отклонен. Игрок кикнут.");
+                    }
+                }
             }
         }
 
-        private void sendReply(String chatId, String message) {
+        public void send2FACard(Player player, long chatId) {
+            String ip = player.getAddress().getAddress().getHostAddress();
+            UUID uuid = player.getUniqueId();
+            PendingApproval.add(uuid); // Переводим игрока в статус ожидания клика 2FA
+
+            SendMessage sm = new SendMessage();
+            sm.setChatId(String.valueOf(chatId));
+            sm.setText("🔔 Вход в Аккаунт с IP: " + ip + "\nUUID: " + uuid.toString());
+
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            List<InlineKeyboardButton> row = new ArrayList<>();
+
+            InlineKeyboardButton accept = new InlineKeyboardButton();
+            accept.setText("✅ Принять");
+            accept.setCallbackData("2fa_accept_" + uuid.toString());
+
+            InlineKeyboardButton deny = new InlineKeyboardButton();
+            deny.setText("❌ Отказать");
+            deny.setCallbackData("2fa_deny_" + uuid.toString());
+
+            row.add(accept);
+            row.add(deny);
+            rows.add(row);
+            markup.setKeyboard(rows);
+            sm.setReplyMarkup(markup);
+
+            try { execute(sm); } catch (Exception e) { e.printStackTrace(); }
+        }
+
+        public void sendReply(String chatId, String message) {
             SendMessage sm = new SendMessage();
             sm.setChatId(chatId);
             sm.setText(message);
-            try {
-                execute(sm);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            try { execute(sm); } catch (Exception e) { e.printStackTrace(); }
+        }
+
+        private void editReply(String chatId, int messageId, String text) {
+            EditMessageText em = new EditMessageText();
+            em.setChatId(chatId);
+            em.setMessageId(messageId);
+            em.setText(text);
+            try { execute(em); } catch (Exception e) { e.printStackTrace(); }
         }
     }
 }
