@@ -1,7 +1,6 @@
 package com.minefix.tgbotplugin;
 
 import java.util.UUID;
-import com.example.telegramconsole.SqliteDataStore;
 
 public class DataStore {
 
