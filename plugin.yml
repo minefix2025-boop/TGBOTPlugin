@@ -1,0 +1,11 @@
+name: TGBOTPlugin
+version: 1.0
+main: com.minefix.tgbotplugin.PluginMain
+api-version: 1.16
+commands:
+  reg:
+    description: Register an account
+  login:
+    description: Login to your account
+  link:
+    description: Get linking code for Telegram
